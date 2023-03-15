@@ -1,1 +1,1 @@
-# PhageTermNano
+# wf-NanoTerm
