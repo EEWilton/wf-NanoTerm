@@ -5,19 +5,59 @@ seq_ch = Channel.of(params.seq)
 
 println "\nReference: $params.ref\nSequence reads: $params.seq\n"
 
+process raw_seq {
+	input:
+		path ref
+	
+	output:
+		path "fasta.txt"
+		
+	script:
+	"""
+	grep -v ">" $ref | tr -d "\\n" > fasta.txt
+	"""
+}
+
+process extendRef {
+	input:
+		path fasta
+		path ref
+			
+	output:
+		path "extref.fasta"
+	
+	script:
+	"""
+	#!/usr/bin/env python3
+	
+	f = open('fasta.txt', 'r')
+	refseq = f.read()
+	f.close()
+	
+	edge = 500
+	
+	extref = refseq[-edge:] + refseq + refseq[:edge]
+
+	sourceFile = open('extref.fasta', 'w')
+	print('>extended_reference', file = sourceFile)
+	print(extref, file = sourceFile)
+	sourceFile.close()
+	"""
+}
+
 process runMinimap2 {
 	conda 'my-env.yaml'
 
 	input:
 		path seq
-		path ref
+		path extref
 
 	output:
 		path 'aln.sam'
 		
 	script:
 		"""
-		minimap2 -ax map-ont $params.ref $params.seq > aln.sam
+		minimap2 -ax map-ont $extref $params.seq > aln.sam
 		"""
 }
 
@@ -184,26 +224,13 @@ process covDF {
 	"""
 }
 
-process len {
-	input:
-		path ref
-	
-	output:
-		path "fasta.txt"
-		
-	script:
-	"""
-	grep -v ">" $ref | tr -d "\\n" > fasta.txt
-	"""
-}
-
 process spcDF {
 	conda './my-env.yaml'
 
 	input:
 		path f_bed
 		path r_bed
-		path fasta
+		path extref
 	
 	output:
 		path "f_spc.txt"
@@ -213,7 +240,7 @@ process spcDF {
 	"""
 	#!/usr/bin/env Rscript
 	
-	fa <- scan(file="$fasta", what="string")
+	fa <- scan(file="$extref", what="string")
 	len <- nchar(fa)
 	pos <- seq(1,len,1)
 	
@@ -276,8 +303,9 @@ process tauDF {
 }
 
 workflow {
-	aln_ch = runMinimap2(seq_ch, ref_ch) 
-	len_ch = len(ref_ch)
+	len_ch = raw_seq(ref_ch)
+	ext_ch = extendRef(len_ch, ref_ch)
+	aln_ch = runMinimap2(seq_ch, ext_ch)
 	F_ch = Fstrand(aln_ch)
 	R_ch = Rstrand(aln_ch)
 	Fbed_ch = Fbed(F_ch)
