@@ -1,27 +1,26 @@
 #!/usr/bin/env nextflow
 
-ref_ch = Channel.of(params.ref)
-seq_ch = Channel.of(params.seq)
+ref_ch = Channel.of(params.fasta)
+seq_ch = Channel.of(params.input)
 
-println "\nReference: $params.ref\nSequence reads: $params.seq\n"
+println "\nReference: $params.fasta\nSequence reads: $params.input\n"
 
 process rawSeq {
 	input:
-		path ref
+		path fasta
 	
 	output:
-		path 'fasta.txt'
+		path 'rawseq.txt'
 		
 	script:
 	"""
-	grep -v ">" $ref | tr -d "\\n" > fasta.txt
+	grep -v ">" $fasta | tr -d "\\n" > rawseq.txt
 	"""
 }
 
 process extendRef {
 	input:
-		path fasta
-		path ref
+		path rawseq
 			
 	output:
 		path 'extref.fasta'	
@@ -30,7 +29,7 @@ process extendRef {
 	"""
 	#!/usr/bin/env python3
 	
-	f = open('fasta.txt', 'r')
+	f = open('rawseq.txt', 'r')
 	refseq = f.read()
 	f.close()
 	
@@ -61,15 +60,15 @@ process extRawSeq {
 
 process mapping {
 	input:
-		path seq
-		path ref
+		path input
+		path fasta
 
 	output:
 		path 'aln.sam'
 		
 	script:
 		"""
-		minimap2 -ax map-ont $params.ref $params.seq > aln.sam
+		minimap2 -ax map-ont $params.fasta $params.input > aln.sam
 		"""
 }
 
@@ -124,6 +123,8 @@ process cov {
 }
 
 process tau {
+	publishDir "${params.outdir}", mode: 'move', overwrite: true
+	
 	input:
 		path aln_f
 		path aln_r
@@ -132,7 +133,7 @@ process tau {
 		path fasta
 		
 	output:
-		path "tau.csv"
+		path 'tau.csv'
 		
 	script:
 	"""
@@ -186,7 +187,7 @@ process tau {
 
 process extMapping {
 	input:
-		path seq
+		path input
 		path extref
 
 	output:
@@ -194,7 +195,7 @@ process extMapping {
 		
 	script:
 		"""
-		minimap2 -ax map-ont $extref $params.seq > ext_aln.sam
+		minimap2 -ax map-ont $extref $params.input > ext_aln.sam
 		"""
 }
 
@@ -249,6 +250,8 @@ process extCov {
 }
 
 process extTau {
+	publishDir "${params.outdir}", mode: 'move', overwrite: true
+	
 	input:
 		path ext_aln_f
 		path ext_aln_r
@@ -311,7 +314,7 @@ process extTau {
 
 workflow {
 	len_ch = rawSeq(ref_ch)
-	ext_ch = extendRef(len_ch, ref_ch)
+	ext_ch = extendRef(len_ch)
 	aln_ch = mapping(seq_ch, ref_ch)
 	sep_ch = strandSep(aln_ch)
 	bed_ch = bed(sep_ch)
