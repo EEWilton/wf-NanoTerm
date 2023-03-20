@@ -60,8 +60,6 @@ process extRawSeq {
 }
 
 process mapping {
-	conda 'my-env.yaml'
-
 	input:
 		path seq
 		path ref
@@ -76,8 +74,6 @@ process mapping {
 }
 
 process strandSep {
-	conda './my-env.yaml'
-	
 	input:
 		path aln
 		
@@ -96,8 +92,6 @@ process strandSep {
 }
 
 process bed {
-	conda './my-env.yaml'
-	
 	input:
 		path aln_f_sorted
 		path aln_r_sorted
@@ -113,9 +107,7 @@ process bed {
 	"""
 }
 
-process cov {
-	conda './my-env.yaml'
-	
+process cov {	
 	input:
 		path aln_f_sorted
 		path aln_r_sorted
@@ -132,7 +124,6 @@ process cov {
 }
 
 process tau {
-	conda './my-env.yaml'
 	input:
 		path aln_f
 		path aln_r
@@ -194,8 +185,6 @@ process tau {
 }
 
 process extMapping {
-	conda 'my-env.yaml'
-
 	input:
 		path seq
 		path extref
@@ -210,8 +199,6 @@ process extMapping {
 }
 
 process extStrandSep {
-	conda './my-env.yaml'
-	
 	input:
 		path ext_aln
 		
@@ -230,8 +217,6 @@ process extStrandSep {
 }
 
 process extBed {
-conda './my-env.yaml'
-	
 	input:
 		path ext_aln_f_sorted
 		path ext_aln_r_sorted
@@ -247,9 +232,7 @@ conda './my-env.yaml'
 	"""
 }
 
-process extCov {
-	conda './my-env.yaml'
-	
+process extCov {	
 	input:
 		path ext_aln_f_sorted
 		path ext_aln_r_sorted
@@ -266,7 +249,6 @@ process extCov {
 }
 
 process extTau {
-	conda './my-env.yaml'
 	input:
 		path ext_aln_f
 		path ext_aln_r
