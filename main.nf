@@ -117,10 +117,11 @@ process cov {
 	
 	script:
 	"""
-	samtools mpileup -d 0 -o aln_f_cov.txt $aln_f_sorted
-	samtools mpileup -d 0 -o aln_r_cov.txt $aln_r_sorted
+	samtools depth -a -d 0 -o aln_f_cov.txt $aln_f_sorted
+	samtools depth -a -d 0 -o aln_r_cov.txt $aln_r_sorted
 	"""
 }
+
 
 process tau {
 	publishDir "${params.outdir}", mode: 'move', overwrite: true
@@ -150,12 +151,12 @@ process tau {
 	r_bed['start'] <- r_bed['start'] + 1
 
 	f_cov <- read.table("$aln_f_cov", quote="\\"", comment.char="",
-                    colClasses=c("character","numeric","NULL","numeric","NULL","NULL"))
+                    colClasses=c("character","numeric","numeric"))
 	f_cov <- setNames(f_cov, c("chr","pos","cov"))
 	f_cov['strand'] <- "f"
 
 	r_cov <- read.table("$aln_r_cov", quote="\\"", comment.char="",
-                    colClasses=c("character","numeric","NULL","numeric","NULL","NULL"))
+                    colClasses=c("character","numeric","numeric"))
 	r_cov <- setNames(r_cov, c("chr","pos","cov"))
 	r_cov['strand'] <- "r"
 	
@@ -244,8 +245,8 @@ process extCov {
 	
 	script:
 	"""
-	samtools mpileup -d 0 -o ext_aln_f_cov.txt $ext_aln_f_sorted
-	samtools mpileup -d 0 -o ext_aln_r_cov.txt $ext_aln_r_sorted
+	samtools depth -a -d 0 -o ext_aln_f_cov.txt $ext_aln_f_sorted
+	samtools depth -a -d 0 -o ext_aln_r_cov.txt $ext_aln_r_sorted
 	"""
 }
 
@@ -277,12 +278,12 @@ process extTau {
 	r_bed['start'] <- r_bed['start'] + 1
 
 	f_cov <- read.table("$ext_aln_f_cov", quote="\\"", comment.char="",
-                    colClasses=c("character","numeric","NULL","numeric","NULL","NULL"))
+                    colClasses=c("character","numeric","numeric"))
 	f_cov <- setNames(f_cov, c("chr","pos","cov"))
 	f_cov['strand'] <- "f"
 
 	r_cov <- read.table("$ext_aln_r_cov", quote="\\"", comment.char="",
-                    colClasses=c("character","numeric","NULL","numeric","NULL","NULL"))
+                    colClasses=c("character","numeric","numeric"))
 	r_cov <- setNames(r_cov, c("chr","pos","cov"))
 	r_cov['strand'] <- "r"
 	
