@@ -6,6 +6,8 @@ plat_ch = Channel.of(params.seqplat)
 
 println "\nReference: $params.fasta\nSequence reads: $params.input\n"
 
+// This process extracts the raw sequence from the fasta file, removing the header
+// The output is a text file with just the nucleotide sequence of the reference genome
 process rawSeq {
 	input:
 		path fasta
@@ -19,6 +21,8 @@ process rawSeq {
 	"""
 }
 
+// This process extends the raw referemce sequence by 500 nt on each end, as if the genome was linear
+// The output is a new fasta file with the extended reference sequence
 process extendRef {
 	input:
 		path rawseq
@@ -46,6 +50,8 @@ process extendRef {
 	"""
 }
 
+// This process extracts the extended reference sequence into a text file, removing the header
+// The output is a text file with just the nucleotide sequence of the extended reference genome
 process extRawSeq {
 	input:
 		path extref
@@ -59,6 +65,9 @@ process extRawSeq {
 	"""
 }
 
+// This process maps the input fastq.gz file against the reference genome using minimap2
+// This process can be adjusted to suit the sequencing platform used
+// The output is a .sam file of the alignment
 process mapping {
 	input:
 		path input
@@ -204,7 +213,7 @@ process stats {
 		path tau
 		
 	output:
-		path 'phage_norm.csv'
+		path 'stats.csv'
 	
 	script:
 	"""
@@ -218,17 +227,17 @@ process stats {
 	from scipy import stats
 	from statsmodels.sandbox.stats.multicomp import multipletests
 
-	def picMax(coverage, nbr_pic):
-		picMaxPlus = heapq.nlargest(nbr_pic, zip(coverage[0], itertools.count()))
-		picMaxMinus = heapq.nlargest(nbr_pic, zip(coverage[1], itertools.count()))
-		TopFreqH = max(max(np.array(list(zip(*picMaxPlus))[0])), max(np.array(list(zip(*picMaxMinus))[0])))
-		return picMaxPlus, picMaxMinus, TopFreqH
+	def peakMax(coverage, nbr_peaks):
+		peakMaxPlus = heapq.nlargest(nbr_peaks, zip(coverage[0], itertools.count()))
+		peakMaxMinus = heapq.nlargest(nbr_peaks, zip(coverage[1], itertools.count()))
+		TopFreqH = max(max(np.array(list(zip(*peakMaxPlus))[0])), max(np.array(list(zip(*peakMaxMinus))[0])))
+		return peakMaxPlus, peakMaxMinus, TopFreqH
 
-	def RemoveClosePicMax(picMax, gen_len, nbr_base):
+	def removeClosePeakMax(peakMax, gen_len, nbr_base):
 		if nbr_base == 0:
-			return picMax[1:], [picMax[0]]
-		picMaxRC = picMax[:]
-		posMax = picMaxRC[0][1]
+			return peakMax[1:], [peakMax[0]]
+		peakMaxRC = peakMax[:]
+		posMax = peakMaxRC[0][1]
 		LimSup = posMax + nbr_base
 		LimInf = posMax - nbr_base
 		if LimSup < gen_len and LimInf >= 0:
@@ -239,36 +248,36 @@ process stats {
 		elif LimInf < 0:
 			TurnInf = gen_len + LimInf
 			PosOut = list(range(0,posMax))+list(range(TurnInf,gen_len)) + list(range(posMax,LimSup))
-		picMaxOK = []
-		picOUT = []
-		for peaks in picMaxRC:
+		peakMaxOK = []
+		peakOUT = []
+		for peaks in peakMaxRC:
 			if peaks[1] not in PosOut:
-				picMaxOK.append(peaks)
+				peakMaxOK.append(peaks)
 			else:
-				picOUT.append(peaks)
-		return picMaxOK, picOUT
+				peakOUT.append(peaks)
+		return peakMaxOK, peakOUT
 
-	def addClosePic(picList, picClose, norm = 0):
+	def addClosePeak(peakList, peakClose, norm = 0):
 		if norm:
-			if picClose[0][0] >= 0.5:
-				return picList, [picClose[0]]
-		picListOK = picList[:]
+			if peakClose[0][0] >= 0.5:
+				return peakList, [peakClose[0]]
+		peakListOK = peakList[:]
 		cov_add = 0
-		for cov in picClose:
+		for cov in peakClose:
 			cov_add += cov[0]
-			picListOK[cov[1]] = 0.01
-		picListOK[picClose[0][1]] = cov_add
-		return picListOK, picClose
+			peakListOK[cov[1]] = 0.01
+		peakListOK[peakClose[0][1]] = cov_add
+		return peakListOK, peakClose
 
-	def remove_pics(arr,n):
+	def removePeaks(arr,n):
 		arr=np.array(arr)
-		pic_pos=arr.argsort()[-n:][::-1]
-		arr2=np.delete(arr,pic_pos)
+		peak_pos=arr.argsort()[-n:][::-1]
+		arr2=np.delete(arr,peak_pos)
 		return arr2
 
 	def gamma(X):
 		X = np.array(X, dtype=np.int64)
-		v = remove_pics(X, 3)
+		v = removePeaks(X, 3)
 
 		dist_max = float(max(v))
 		if dist_max == 0:
@@ -281,18 +290,18 @@ process stats {
 		return stats.gamma.pdf(X, fit_alpha, loc=fit_loc, scale=fit_beta)
 
 
-	def test_pics_decision_tree(whole_coverage, termini_coverage, termini_coverage_norm, termini_coverage_norm_close):
-		L = len(whole_coverage[0])
-		res = pd.DataFrame({"Position": np.array(range(L)) + 1, "termini_plus": termini_coverage[0],
-                        "SPC_norm_plus": termini_coverage_norm[0], "SPC_norm_minus": termini_coverage_norm[1],
-                        "SPC_norm_plus_close": termini_coverage_norm_close[0],
-                        "SPC_norm_minus_close": termini_coverage_norm_close[1], "termini_minus": termini_coverage[1],
-                        "cov_plus": whole_coverage[0], "cov_minus": whole_coverage[1]})
+	def peaksDecisionTree(read_depth, starting_pos_depth, tau, tau_close):
+		L = len(read_depth[0])
+		res = pd.DataFrame({"Position": np.array(range(L)) + 1, "SPC_plus": starting_pos_depth[0],
+                        "tau_plus": tau[0], "tau_minus": tau[1],
+                        "tau_plus_close": tau_close[0],
+                        "tau_minus_close": tau_close[1], "SPC_minus": starting_pos_depth[1],
+                        "cov_plus": read_depth[0], "cov_minus": read_depth[1]})
 
 		res["cov"] = res["cov_plus"].values + res["cov_minus"].values
 
-		res["R_plus"] = list(map(float, termini_coverage[0])) // np.mean(termini_coverage[0])
-		res["R_minus"] = list(map(float, termini_coverage[1])) // np.mean(termini_coverage[1])
+		res["R_plus"] = list(map(float, starting_pos_depth[0])) // np.mean(starting_pos_depth[0])
+		res["R_minus"] = list(map(float, starting_pos_depth[1])) // np.mean(starting_pos_depth[1])
 
 		regr = DecisionTreeRegressor(max_depth=3, min_samples_leaf=100)
 		X = np.arange(L)
@@ -303,13 +312,13 @@ process stats {
 		y_1 = regr.predict(X)
 		res["covnode"] = y_1
 		covnodes = np.unique(y_1)
-		thres = np.mean(whole_coverage[0]) / 2
+		thres = np.mean(read_depth[0]) / 2
 		covnodes = [n for n in covnodes if n > thres]
 
 		for node in covnodes:
-			X = res[res["covnode"] == node]["termini_plus"].values
+			X = res[res["covnode"] == node]["SPC_plus"].values
 			res.loc[res["covnode"] == node, "pval_plus"] = gamma(X)
-			X = res[res["covnode"] == node]["termini_minus"].values
+			X = res[res["covnode"] == node]["SPC_minus"].values
 			res.loc[res["covnode"] == node, "pval_minus"] = gamma(X)
 
 		res.loc[res.pval_plus > 1, 'pval_plus'] = 1.00
@@ -322,21 +331,21 @@ process stats {
 		res = res.fillna(1.00)
 
 		res_plus = pd.DataFrame(
-			{"Position": res['Position'], "SPC_std": res['SPC_norm_plus'], "SPC": res['SPC_norm_plus_close'],
+			{"Position": res['Position'], "tau": res['tau_plus'], "tau_close": res['tau_plus_close'],
 			"pval_gamma": res['pval_plus'], "pval_gamma_adj": res['pval_plus_adj']})
 		res_minus = pd.DataFrame(
-			{"Position": res['Position'], "SPC_std": res['SPC_norm_minus'], "SPC": res['SPC_norm_minus_close'],
+			{"Position": res['Position'], "tau": res['tau_minus'], "tau_close": res['tau_minus_close'],
 			"pval_gamma": res['pval_minus'], "pval_gamma_adj": res['pval_minus_adj']})
 
-		res_plus.sort_values("SPC", ascending=False, inplace=True)
-		res_minus.sort_values("SPC", ascending=False, inplace=True)
+		res_plus.sort_values("tau", ascending=False, inplace=True)
+		res_minus.sort_values("tau", ascending=False, inplace=True)
 	
 		res_plus.reset_index(drop=True, inplace=True)
 		res_minus.reset_index(drop=True, inplace=True)
 
 		return res, res_plus, res_minus
 
-	data = pd.read_csv("/home/emily/wf-NanoTerm/output/tau.csv")
+	data = pd.read_csv("$tau")
 
 	f = data[data['strand'] == "f"]
 	r = data[data['strand'] == "r"]
@@ -344,40 +353,40 @@ process stats {
 	f_cov = f['cov'].to_numpy()
 	r_cov = r['cov'].to_numpy()
 
-	whole_coverage = np.array([f_cov, r_cov])
+	read_depth = np.array([f_cov, r_cov])
 
 	f_spc = f['SPC'].to_numpy()
 	r_spc = r['SPC'].to_numpy()
 
-	termini_coverage = np.array([f_spc, r_spc])
+	starting_pos_depth = np.array([f_spc, r_spc])
 
 	f_tau = f['tau'].to_numpy()
 	r_tau = r['tau'].to_numpy()
 
-	termini_coverage_norm = np.array([f_tau, r_tau])
+	tau = np.array([f_tau, r_tau])
 	
 	surrounding = 20
-	gen_len = len(whole_coverage)
+	gen_len = len(read_depth)
 
-	picMaxPlus, picMaxMinus, TopFreqH = picMax(termini_coverage, 5)
-	picMaxPlus_norm, picMaxMinus_norm, TopFreqH_norm = picMax(termini_coverage_norm, 5)
+	peakMaxPlus, peakMaxMinus, TopFreqH = peakMax(starting_pos_depth, 5)
+	peakMaxPlus_norm, peakMaxMinus_norm, TopFreqH_norm = peakMax(tau, 5)
 
-	picMaxPlus, picOUT_forw = RemoveClosePicMax(picMaxPlus, gen_len, surrounding)
-	picMaxMinus, picOUT_rev = RemoveClosePicMax(picMaxMinus, gen_len, surrounding)
-	picMaxPlus_norm, picOUT_norm_forw = RemoveClosePicMax(picMaxPlus_norm, gen_len, surrounding)
-	picMaxMinus_norm, picOUT_norm_rev = RemoveClosePicMax(picMaxMinus_norm, gen_len, surrounding)
+	peakMaxPlus, peakOUT_forw = removeClosePeakMax(peakMaxPlus, gen_len, surrounding)
+	peakMaxMinus, peakOUT_rev = removeClosePeakMax(peakMaxMinus, gen_len, surrounding)
+	peakMaxPlus_norm, peakOUT_norm_forw = removeClosePeakMax(peakMaxPlus_norm, gen_len, surrounding)
+	peakMaxMinus_norm, peakOUT_norm_rev = removeClosePeakMax(peakMaxMinus_norm, gen_len, surrounding)
 
-	termini_coverage_close = termini_coverage[:]
-	termini_coverage_close[0], picOUT_forw = addClosePic(termini_coverage[0], picOUT_forw)
-	termini_coverage_close[1], picOUT_rev = addClosePic(termini_coverage[1], picOUT_rev)
+	starting_pos_depth_close = starting_pos_depth[:]
+	starting_pos_depth_close[0], peakOUT_forw = addClosePeak(starting_pos_depth[0], peakOUT_forw)
+	starting_pos_depth_close[1], peakOUT_rev = addClosePeak(starting_pos_depth[1], peakOUT_rev)
 
-	termini_coverage_norm_close = termini_coverage_norm[:]
-	termini_coverage_norm_close[0], picOUT_norm_forw = addClosePic(termini_coverage_norm[0], picOUT_norm_forw, 1)
-	termini_coverage_norm_close[1], picOUT_norm_rev = addClosePic(termini_coverage_norm[1], picOUT_norm_rev, 1)
+	tau_close = tau[:]
+	tau_close[0], peakOUT_norm_forw = addClosePeak(tau[0], peakOUT_norm_forw, 1)
+	tau_close[1], peakOUT_norm_rev = addClosePeak(tau[1], peakOUT_norm_rev, 1)
 
-	phage_norm, phage_plus_norm, phage_minus_norm = test_pics_decision_tree(whole_coverage, termini_coverage, termini_coverage_norm, termini_coverage_norm_close)
+	phage_norm, phage_plus_norm, phage_minus_norm = peaksDecisionTree(read_depth, starting_pos_depth, tau, tau_close)
 
-	np.savetxt("phage_norm.csv", phage_norm, delimiter=",")
+	phage_norm.to_csv("stats.csv")
 	"""
 }
 
@@ -523,6 +532,210 @@ process extTau {
 	"""	
 }
 
+process extStats {
+	publishDir "${params.outdir}", mode: 'copy', overwrite: true
+
+	input:
+		path trim_tau
+		
+	output:
+		path 'ext_stats.csv'
+	
+	script:
+	"""
+	#! /usr/bin/env python3
+
+	import heapq
+	import itertools
+	import pandas as pd
+	import numpy as np
+	from sklearn.tree import DecisionTreeRegressor
+	from scipy import stats
+	from statsmodels.sandbox.stats.multicomp import multipletests
+
+	def peakMax(coverage, nbr_peaks):
+		peakMaxPlus = heapq.nlargest(nbr_peaks, zip(coverage[0], itertools.count()))
+		peakMaxMinus = heapq.nlargest(nbr_peaks, zip(coverage[1], itertools.count()))
+		TopFreqH = max(max(np.array(list(zip(*peakMaxPlus))[0])), max(np.array(list(zip(*peakMaxMinus))[0])))
+		return peakMaxPlus, peakMaxMinus, TopFreqH
+
+	def removeClosePeakMax(peakMax, gen_len, nbr_base):
+		if nbr_base == 0:
+			return peakMax[1:], [peakMax[0]]
+		peakMaxRC = peakMax[:]
+		posMax = peakMaxRC[0][1]
+		LimSup = posMax + nbr_base
+		LimInf = posMax - nbr_base
+		if LimSup < gen_len and LimInf >= 0:
+			PosOut = list(range(LimInf,LimSup))
+		elif LimSup >= gen_len:
+			TurnSup = LimSup - gen_len
+			PosOut = list(range(posMax,gen_len))+list(range(0,TurnSup)) + list(range(LimInf,posMax))
+		elif LimInf < 0:
+			TurnInf = gen_len + LimInf
+			PosOut = list(range(0,posMax))+list(range(TurnInf,gen_len)) + list(range(posMax,LimSup))
+		peakMaxOK = []
+		peakOUT = []
+		for peaks in peakMaxRC:
+			if peaks[1] not in PosOut:
+				peakMaxOK.append(peaks)
+			else:
+				peakOUT.append(peaks)
+		return peakMaxOK, peakOUT
+
+	def addClosePeak(peakList, peakClose, norm = 0):
+		if norm:
+			if peakClose[0][0] >= 0.5:
+				return peakList, [peakClose[0]]
+		peakListOK = peakList[:]
+		cov_add = 0
+		for cov in peakClose:
+			cov_add += cov[0]
+			peakListOK[cov[1]] = 0.01
+		peakListOK[peakClose[0][1]] = cov_add
+		return peakListOK, peakClose
+
+	def removePeaks(arr,n):
+		arr=np.array(arr)
+		peak_pos=arr.argsort()[-n:][::-1]
+		arr2=np.delete(arr,peak_pos)
+		return arr2
+
+	def gamma(X):
+		X = np.array(X, dtype=np.int64)
+		v = removePeaks(X, 3)
+
+		dist_max = float(max(v))
+		if dist_max == 0:
+			return np.array([1.00] * len(X))
+
+		actual = np.bincount(v)
+		fit_alpha, fit_loc, fit_beta = stats.gamma.fit(v)
+		expected = stats.gamma.pdf(np.arange(0, dist_max + 1, 1), fit_alpha, loc=fit_loc, scale=fit_beta) * sum(actual)
+
+		return stats.gamma.pdf(X, fit_alpha, loc=fit_loc, scale=fit_beta)
+
+
+	def peaksDecisionTree(read_depth, starting_pos_depth, tau, tau_close):
+		L = len(read_depth[0])
+		res = pd.DataFrame({"Position": np.array(range(L)) + 1, "SPC_plus": starting_pos_depth[0],
+                        "tau_plus": tau[0], "tau_minus": tau[1],
+                        "tau_plus_close": tau_close[0],
+                        "tau_minus_close": tau_close[1], "SPC_minus": starting_pos_depth[1],
+                        "cov_plus": read_depth[0], "cov_minus": read_depth[1]})
+
+		res["cov"] = res["cov_plus"].values + res["cov_minus"].values
+
+		res["R_plus"] = list(map(float, starting_pos_depth[0])) // np.mean(starting_pos_depth[0])
+		res["R_minus"] = list(map(float, starting_pos_depth[1])) // np.mean(starting_pos_depth[1])
+
+		regr = DecisionTreeRegressor(max_depth=3, min_samples_leaf=100)
+		X = np.arange(L)
+		X = X[:, np.newaxis]
+		y = res["cov"].values
+		regr.fit(X, y)
+
+		y_1 = regr.predict(X)
+		res["covnode"] = y_1
+		covnodes = np.unique(y_1)
+		thres = np.mean(read_depth[0]) / 2
+		covnodes = [n for n in covnodes if n > thres]
+
+		for node in covnodes:
+			X = res[res["covnode"] == node]["SPC_plus"].values
+			res.loc[res["covnode"] == node, "pval_plus"] = gamma(X)
+			X = res[res["covnode"] == node]["SPC_minus"].values
+			res.loc[res["covnode"] == node, "pval_minus"] = gamma(X)
+
+		res.loc[res.pval_plus > 1, 'pval_plus'] = 1.00
+		res.loc[res.pval_minus > 1, 'pval_minus'] = 1.00
+		res = res.fillna(1.00)
+
+		res['pval_plus_adj'] = multipletests(res["pval_plus"].values, alpha=0.01, method="bonferroni")[1]
+		res['pval_minus_adj'] = multipletests(res["pval_minus"].values, alpha=0.01, method="bonferroni")[1]
+
+		res = res.fillna(1.00)
+
+		res_plus = pd.DataFrame(
+			{"Position": res['Position'], "tau": res['tau_plus'], "tau_close": res['tau_plus_close'],
+			"pval_gamma": res['pval_plus'], "pval_gamma_adj": res['pval_plus_adj']})
+		res_minus = pd.DataFrame(
+			{"Position": res['Position'], "tau": res['tau_minus'], "tau_close": res['tau_minus_close'],
+			"pval_gamma": res['pval_minus'], "pval_gamma_adj": res['pval_minus_adj']})
+
+		res_plus.sort_values("tau", ascending=False, inplace=True)
+		res_minus.sort_values("tau", ascending=False, inplace=True)
+	
+		res_plus.reset_index(drop=True, inplace=True)
+		res_minus.reset_index(drop=True, inplace=True)
+
+		return res, res_plus, res_minus
+
+	data = pd.read_csv("$trim_tau")
+
+	f = data[data['strand'] == "f"]
+	r = data[data['strand'] == "r"]
+
+	f_cov = f['cov'].to_numpy()
+	r_cov = r['cov'].to_numpy()
+
+	read_depth = np.array([f_cov, r_cov])
+
+	f_spc = f['SPC'].to_numpy()
+	r_spc = r['SPC'].to_numpy()
+
+	starting_pos_depth = np.array([f_spc, r_spc])
+
+	f_tau = f['tau'].to_numpy()
+	r_tau = r['tau'].to_numpy()
+
+	tau = np.array([f_tau, r_tau])
+	
+	surrounding = 20
+	gen_len = len(read_depth)
+
+	peakMaxPlus, peakMaxMinus, TopFreqH = peakMax(starting_pos_depth, 5)
+	peakMaxPlus_norm, peakMaxMinus_norm, TopFreqH_norm = peakMax(tau, 5)
+
+	peakMaxPlus, peakOUT_forw = removeClosePeakMax(peakMaxPlus, gen_len, surrounding)
+	peakMaxMinus, peakOUT_rev = removeClosePeakMax(peakMaxMinus, gen_len, surrounding)
+	peakMaxPlus_norm, peakOUT_norm_forw = removeClosePeakMax(peakMaxPlus_norm, gen_len, surrounding)
+	peakMaxMinus_norm, peakOUT_norm_rev = removeClosePeakMax(peakMaxMinus_norm, gen_len, surrounding)
+
+	starting_pos_depth_close = starting_pos_depth[:]
+	starting_pos_depth_close[0], peakOUT_forw = addClosePeak(starting_pos_depth[0], peakOUT_forw)
+	starting_pos_depth_close[1], peakOUT_rev = addClosePeak(starting_pos_depth[1], peakOUT_rev)
+
+	tau_close = tau[:]
+	tau_close[0], peakOUT_norm_forw = addClosePeak(tau[0], peakOUT_norm_forw, 1)
+	tau_close[1], peakOUT_norm_rev = addClosePeak(tau[1], peakOUT_norm_rev, 1)
+
+	phage_norm, phage_plus_norm, phage_minus_norm = peaksDecisionTree(read_depth, starting_pos_depth, tau, tau_close)
+
+	phage_norm.to_csv("ext_stats.csv")
+	"""
+}
+
+process report {
+	input:
+		path stats
+		path ext_stats
+		
+	output:
+		path 'report.csv'
+	script:
+	"""
+	#!/usr/bin/env Rscript
+	
+	stats <- read.csv("$stats", quote="\\"", comment.char="")
+	
+	stats <- stats[-c(1)]
+	
+	write.csv(stats, "report.csv")
+	
+	"""
+}
+
 workflow {
 	len_ch = rawSeq(ref_ch)
 	ext_ch = extendRef(len_ch)
@@ -531,11 +744,13 @@ workflow {
 	bed_ch = bed(sep_ch)
 	cov_ch = cov(sep_ch)
 	tau_ch = tau(bed_ch, cov_ch, len_ch)
-	stats(tau_ch)
+	stats_ch = stats(tau_ch)
 	extlen_ch = extRawSeq(ext_ch)
 	extaln_ch = extMapping(seq_ch, ext_ch, plat_ch)
 	extsep_ch = extStrandSep(extaln_ch)
 	extbed_ch = extBed(extsep_ch)
 	extcov_ch = extCov(extsep_ch)
-	extTau(extbed_ch, extcov_ch, extlen_ch)
+	extTau_ch = extTau(extbed_ch, extcov_ch, extlen_ch)
+	extStats_ch = extStats(extTau_ch)
+	report(stats_ch, extStats_ch)
 }
