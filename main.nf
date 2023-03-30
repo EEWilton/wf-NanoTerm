@@ -3,6 +3,7 @@
 ref_ch = Channel.of(params.fasta)
 seq_ch = Channel.of(params.input)
 plat_ch = Channel.of(params.seqplat)
+name_ch = Channel.of(params.name)
 
 println "\nReference: $params.fasta\nSequence reads: $params.input\n"
 
@@ -214,6 +215,8 @@ process stats {
 		
 	output:
 		path 'stats.csv'
+		path 'f_sig.csv'
+		path 'r_sig.csv'
 	
 	script:
 	"""
@@ -289,7 +292,6 @@ process stats {
 
 		return stats.gamma.pdf(X, fit_alpha, loc=fit_loc, scale=fit_beta)
 
-
 	def peaksDecisionTree(read_depth, starting_pos_depth, tau, tau_close):
 		L = len(read_depth[0])
 		res = pd.DataFrame({"Position": np.array(range(L)) + 1, "SPC_plus": starting_pos_depth[0],
@@ -345,6 +347,12 @@ process stats {
 
 		return res, res_plus, res_minus
 
+	def selectSignificant(table, pvalue, limit):
+		table_pvalue = table.loc[lambda df: df.pval_gamma_adj < pvalue, :]
+		table_pvalue_limit = table_pvalue.loc[lambda df: df.tau < limit, :]
+		table_pvalue_limit.reset_index(drop=True, inplace=True)
+		return table_pvalue_limit
+	
 	data = pd.read_csv("$tau")
 
 	f = data[data['strand'] == "f"]
@@ -385,7 +393,12 @@ process stats {
 	tau_close[1], peakOUT_norm_rev = addClosePeak(tau[1], peakOUT_norm_rev, 1)
 
 	phage_norm, phage_plus_norm, phage_minus_norm = peaksDecisionTree(read_depth, starting_pos_depth, tau, tau_close)
+	
+	plus_significant = selectSignificant(phage_plus_norm, 1.0 / gen_len, 1.0)
+	minus_significant = selectSignificant(phage_minus_norm, 1.0 / gen_len, 1.0)
 
+	plus_significant.to_csv("f_sig.csv")
+	minus_significant.to_csv("r_sig.csv")
 	phage_norm.to_csv("stats.csv")
 	"""
 }
@@ -717,22 +730,48 @@ process extStats {
 }
 
 process report {
+	publishDir "${params.outdir}", mode: 'copy', overwrite: true
+	
 	input:
+		path input
+		path fasta
 		path stats
+		path f_sig
+		path r_sig
 		path ext_stats
+		val name
+		val seqplat
 		
 	output:
-		path 'report.csv'
+		path 'report.docx'
+		
 	script:
 	"""
 	#!/usr/bin/env Rscript
 	
+	library("ggplot2")
+	library("tidyverse")
+	library("dplyr")
+	library("ggrepel")
+	library("ggthemes")
+	library("scales")
+	library("officer")
+
 	stats <- read.csv("$stats", quote="\\"", comment.char="")
+	date <- format(Sys.Date())
+	name <- "$name"
 	
-	stats <- stats[-c(1)]
 	
-	write.csv(stats, "report.csv")
 	
+	report <- read_docx() %>%
+		body_add_par(value = paste("NanoTerm Report: ", name), style = "heading 1") %>%
+		body_add_par("", style = "Normal") %>%
+		body_add_par("Run details", style = "heading 2") %>%
+		body_add_par(value = paste("Generated on: ", date), style = "Normal") %>%
+		body_add_par(value = paste("Input sequences: ", "$params.input"), style = "Normal") %>%
+		body_add_par(value = paste("Reference genome: ", "$params.fasta"), style = "Normal")
+ 
+	print(report, target = "./report.docx")
 	"""
 }
 
@@ -752,5 +791,5 @@ workflow {
 	extcov_ch = extCov(extsep_ch)
 	extTau_ch = extTau(extbed_ch, extcov_ch, extlen_ch)
 	extStats_ch = extStats(extTau_ch)
-	report(stats_ch, extStats_ch)
+	report(stats_ch, extStats_ch, ref_ch, seq_ch, name_ch, plat_ch)
 }
