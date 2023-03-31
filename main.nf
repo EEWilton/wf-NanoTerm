@@ -22,7 +22,7 @@ process rawSeq {
 	"""
 }
 
-// This process extends the raw referemce sequence by 500 nt on each end, as if the genome was linear
+// This process extends the raw referemce sequence by 500 nt on each end, as if the genome was a concatamer
 // The output is a new fasta file with the extended reference sequence
 process extendRef {
 	input:
@@ -91,6 +91,29 @@ process mapping {
 
 		else 
 			 error "Invalid sequencing platform: $params.seqplat"
+}
+
+process alignStats {
+	input:
+		path aln
+		
+	output:
+		env totalReads
+		env mappedReads
+		env unmappedReads
+		env aveReadLen
+		env maxReadLen
+	
+	script:
+		"""
+		samtools stats $aln | grep ^SN | cut -f 2- > aln_stats.txt 
+		
+		totalReads=`grep "raw total sequences:" aln_stats.txt | grep -oz [[:digit:]]`
+		mappedReads=`grep "reads mapped:" aln_stats.txt | grep -oz [[:digit:]]`
+		unmappedReads=`grep "reads unmapped:" aln_stats.txt | grep -oz [[:digit:]]`
+		aveReadLen=`grep "average length:" aln_stats.txt | grep -oz [[:digit:]]`
+		maxReadLen=`grep "maximum length:" aln_stats.txt | grep -oz [[:digit:]]`
+		"""
 }
 
 process strandSep {
@@ -374,7 +397,7 @@ process stats {
 	tau = np.array([f_tau, r_tau])
 	
 	surrounding = 20
-	gen_len = len(read_depth)
+	gen_len = len(f_cov)
 
 	peakMaxPlus, peakMaxMinus, TopFreqH = peakMax(starting_pos_depth, 5)
 	peakMaxPlus_norm, peakMaxMinus_norm, TopFreqH_norm = peakMax(tau, 5)
@@ -553,6 +576,8 @@ process extStats {
 		
 	output:
 		path 'ext_stats.csv'
+		path 'ext_f_sig.csv'
+		path 'ext_r_sig.csv'
 	
 	script:
 	"""
@@ -683,6 +708,12 @@ process extStats {
 		res_minus.reset_index(drop=True, inplace=True)
 
 		return res, res_plus, res_minus
+	
+	def selectSignificant(table, pvalue, limit):
+		table_pvalue = table.loc[lambda df: df.pval_gamma_adj < pvalue, :]
+		table_pvalue_limit = table_pvalue.loc[lambda df: df.tau < limit, :]
+		table_pvalue_limit.reset_index(drop=True, inplace=True)
+		return table_pvalue_limit
 
 	data = pd.read_csv("$trim_tau")
 
@@ -724,6 +755,12 @@ process extStats {
 	tau_close[1], peakOUT_norm_rev = addClosePeak(tau[1], peakOUT_norm_rev, 1)
 
 	phage_norm, phage_plus_norm, phage_minus_norm = peaksDecisionTree(read_depth, starting_pos_depth, tau, tau_close)
+	
+	plus_significant = selectSignificant(phage_plus_norm, 1.0 / gen_len, 1.0)
+	minus_significant = selectSignificant(phage_minus_norm, 1.0 / gen_len, 1.0)
+
+	plus_significant.to_csv("ext_f_sig.csv")
+	minus_significant.to_csv("ext_r_sig.csv")
 
 	phage_norm.to_csv("ext_stats.csv")
 	"""
@@ -738,9 +775,13 @@ process report {
 		path stats
 		path f_sig
 		path r_sig
-		path ext_stats
 		val name
 		val seqplat
+		val totalReads
+		val mappedReads
+		val unmappedReads
+		val aveReadLen
+		val maxReadLen
 		
 	output:
 		path 'report.docx'
@@ -756,20 +797,129 @@ process report {
 	library("ggthemes")
 	library("scales")
 	library("officer")
+	library("mschart")
+	library("zoo")
 
-	stats <- read.csv("$stats", quote="\\"", comment.char="")
+	data <- read.csv("stats.csv", quote="\\"", comment.char="")
 	date <- format(Sys.Date())
-	name <- "$name"
+	name <- as.character("$name")
+	totalReads <- as.integer("$totalReads")
+	mappedReads <- as.integer("$mappedReads")
+	unmappedReads <- as.integer("$unmappedReads")
+	aveReadLen <- as.integer("$aveReadLen")
+	maxReadLen <- as.integer("$maxReadLen")
+	
+	len <- max(data['Position'])
+	window <- 0.01 * len
+  
+	max_plus <- max(data['cov_plus'])
+	max_minus <- max(data['cov_minus'])
+
+	top_tau_plus <- data %>%
+		arrange(desc(tau_plus)) %>%
+		filter(pval_plus_adj <= 0.5) %>%
+		filter(cov_plus > (0.05 * max_plus)) 
+	
+	top_tau_minus <- data %>%
+		arrange(desc(tau_minus)) %>%
+		filter(pval_minus_adj <= 0.5) %>%
+		filter(cov_minus > (0.05 * max_minus)) 
+
+	f_term <- top_tau_plus[1,2]
+	r_term <- top_tau_minus[1,2]
+
+	f_term_tau <- top_tau_plus[1,4]
+	r_term_tau <- top_tau_minus[1,5]
+	
+	f_term_p <- top_tau_plus[1,17]
+	r_term_p <- top_tau_minus[1,18]
+
+	strand <- c("Forward","Reverse")
+	terms <- c(f_term, r_term)
+	taus <- c(f_term_tau, r_term_tau)
+	pvals <- c(f_term_p, r_term_p)
+	table <- data.frame(strand, terms, taus, pvals)
+
+	term_dist <- r_term - f_term
+	
+	colours <- c("Forward" = "springgreen4", "Reverse" = "purple")
+
+	depth <- ggplot(data = data, aes(x=Position, y=rollmean(cov, window, na.pad = TRUE, align = "right"))) +
+		theme_calc() + 
+		geom_vline(xintercept=f_term, linetype="dashed", colour="springgreen3", linewidth=1.1) + 
+		geom_vline(xintercept=r_term, linetype="dashed", colour="violet", linewidth=1.1) +
+		geom_line(data=data, aes(x=Position, y=rollmean(cov_plus, window, na.pad = TRUE, align = "right"), colour="Forward")) +
+		geom_line(data=data, aes(x=Position, y=rollmean(cov_minus, window, na.pad = TRUE, align = "right"), colour="Reverse")) +
+		geom_line() +
+		labs(x = "Reference genome position",
+			y = "Read depth",
+			colour = "Legend") +
+		scale_color_manual(values = colours) +
+		scale_x_continuous(labels = comma) +
+		guides(colour = guide_legend(override.aes = list(linewidth = 3)))
+
+	tau <- ggplot(data=data) +
+		theme_calc() + 
+		geom_point(data=data, aes(x=Position, y=tau_plus, colour="Forward")) +
+		geom_point(data=data, aes(x=Position, y=tau_minus, colour="Reverse")) +
+		geom_label_repel(data=subset(data, Position == f_term), 
+                   aes(x=Position, y=tau_plus,label=Position), colour="springgreen4",
+                   show.legend = FALSE) + 
+		geom_label_repel(data=subset(data,  Position == r_term), 
+                   aes(x=Position, y=tau_minus,label=Position), colour="purple",
+                   show.legend = FALSE) +
+		labs(x = "Reference genome position",
+			y = "tau",
+			colour = "Legend") +
+		scale_color_manual(values = colours) +
+		scale_x_continuous(labels = comma) +
+		scale_y_continuous(limits=c(0,1))
 	
 	
-	
+	if (term_dist > 20){
+		class <- "DTR"
+	} else if (term_dist < 0){
+		class <- "COS 3′"
+	} else {
+		class <- "COS 5′"
+	}
+
 	report <- read_docx() %>%
 		body_add_par(value = paste("NanoTerm Report: ", name), style = "heading 1") %>%
 		body_add_par("", style = "Normal") %>%
 		body_add_par("Run details", style = "heading 2") %>%
 		body_add_par(value = paste("Generated on: ", date), style = "Normal") %>%
 		body_add_par(value = paste("Input sequences: ", "$params.input"), style = "Normal") %>%
-		body_add_par(value = paste("Reference genome: ", "$params.fasta"), style = "Normal")
+		body_add_par(value = paste("Reference genome: ", "$params.fasta"), style = "Normal") %>%
+		body_add_par("Alignment details", style = "heading 2") %>%
+		body_add_par(value = paste("Sequencing platform:", "$params.seqplat"), style = "Normal") %>%
+		body_add_par(value = paste("Number of sequence reads: ", totalReads), style = "Normal") %>%
+		body_add_par(value = paste("Number of reads aligned: ", mappedReads), style = "Normal") %>%
+		body_add_par(value = paste("Number of reads not aligned: ", unmappedReads), style = "Normal") %>%
+		body_add_par(value = paste("Average read length: ", aveReadLen), style = "Normal") %>%
+		body_add_par(value = paste("Maximum read length: ", maxReadLen), style = "Normal") %>%
+		body_add_par("", style = "Normal") %>%
+		body_add_par("Phage prediction", style = "heading 2") %>%
+		body_add_table(table, style = "Normal", first_column = TRUE) %>%
+		body_add_par("", style = "Normal") %>%
+		body_add_par(value = paste("Phage class: ", class), style = "Normal")
+
+	if (class == "COS 5′"){
+		report <- body_add_par(report, value = paste("Cohesive sequence: ", class), style = "Normal")
+	} else if (class == "COS 3′"){
+		report <- body_add_par(report, value = paste("Cohesive sequence: ", class), style = "Normal")
+	} else if (class == "DTR"){
+		report <- body_add_par(report, value = paste("DTR length: ", term_dist), style = "Normal")
+	} else {
+	}
+
+	report <- body_add_par(report, "Figures", style = "heading 2") %>%
+		body_add_par("", style = "Normal") %>%
+		body_add_gg(value = tau, style = "centered") %>%
+		body_add_par(value = "Figure 1. The tau value calculated for each genome position.") %>%
+		body_add_par("", style = "Normal") %>%
+		body_add_gg(value = depth, style = "centered") %>%
+		body_add_par(value = "Figure 2. The total read depth of the sequencing run, graphed as a rolling average with a window size equal to 1% of the reference genome length.  Black is the sum of forward and reverse read depth.")
  
 	print(report, target = "./report.docx")
 	"""
@@ -779,6 +929,7 @@ workflow {
 	len_ch = rawSeq(ref_ch)
 	ext_ch = extendRef(len_ch)
 	aln_ch = mapping(seq_ch, ref_ch, plat_ch)
+	alnstats_ch = alignStats(aln_ch)
 	sep_ch = strandSep(aln_ch)
 	bed_ch = bed(sep_ch)
 	cov_ch = cov(sep_ch)
@@ -791,5 +942,5 @@ workflow {
 	extcov_ch = extCov(extsep_ch)
 	extTau_ch = extTau(extbed_ch, extcov_ch, extlen_ch)
 	extStats_ch = extStats(extTau_ch)
-	report(stats_ch, extStats_ch, ref_ch, seq_ch, name_ch, plat_ch)
+	report(stats_ch, ref_ch, seq_ch, name_ch, plat_ch, alnstats_ch)
 }
