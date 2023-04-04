@@ -4,6 +4,7 @@ ref_ch = Channel.of(params.fasta)
 seq_ch = Channel.of(params.input)
 plat_ch = Channel.of(params.seqplat)
 name_ch = Channel.of(params.name)
+outdir_ch = Channel.of(params.outdir)
 
 println "\nReference: $params.fasta\nSequence reads: $params.input\n"
 
@@ -208,48 +209,6 @@ process stats {
 	from scipy import stats
 	from statsmodels.sandbox.stats.multicomp import multipletests
 
-	def peakMax(coverage, nbr_peaks):
-		peakMaxPlus = heapq.nlargest(nbr_peaks, zip(coverage[0], itertools.count()))
-		peakMaxMinus = heapq.nlargest(nbr_peaks, zip(coverage[1], itertools.count()))
-		TopFreqH = max(max(np.array(list(zip(*peakMaxPlus))[0])), max(np.array(list(zip(*peakMaxMinus))[0])))
-		return peakMaxPlus, peakMaxMinus, TopFreqH
-
-	def removeClosePeakMax(peakMax, gen_len, nbr_base):
-		if nbr_base == 0:
-			return peakMax[1:], [peakMax[0]]
-		peakMaxRC = peakMax[:]
-		posMax = peakMaxRC[0][1]
-		LimSup = posMax + nbr_base
-		LimInf = posMax - nbr_base
-		if LimSup < gen_len and LimInf >= 0:
-			PosOut = list(range(LimInf,LimSup))
-		elif LimSup >= gen_len:
-			TurnSup = LimSup - gen_len
-			PosOut = list(range(posMax,gen_len))+list(range(0,TurnSup)) + list(range(LimInf,posMax))
-		elif LimInf < 0:
-			TurnInf = gen_len + LimInf
-			PosOut = list(range(0,posMax))+list(range(TurnInf,gen_len)) + list(range(posMax,LimSup))
-		peakMaxOK = []
-		peakOUT = []
-		for peaks in peakMaxRC:
-			if peaks[1] not in PosOut:
-				peakMaxOK.append(peaks)
-			else:
-				peakOUT.append(peaks)
-		return peakMaxOK, peakOUT
-
-	def addClosePeak(peakList, peakClose, norm = 0):
-		if norm:
-			if peakClose[0][0] >= 0.5:
-				return peakList, [peakClose[0]]
-		peakListOK = peakList[:]
-		cov_add = 0
-		for cov in peakClose:
-			cov_add += cov[0]
-			peakListOK[cov[1]] = 0.01
-		peakListOK[peakClose[0][1]] = cov_add
-		return peakListOK, peakClose
-
 	def removePeaks(arr,n):
 		arr=np.array(arr)
 		peak_pos=arr.argsort()[-n:][::-1]
@@ -270,12 +229,10 @@ process stats {
 
 		return stats.gamma.pdf(X, fit_alpha, loc=fit_loc, scale=fit_beta)
 
-	def peaksDecisionTree(read_depth, starting_pos_depth, tau, tau_close):
+	def peaksDecisionTree(read_depth, starting_pos_depth, tau):
 		L = len(read_depth[0])
 		res = pd.DataFrame({"Position": np.array(range(L)) + 1, "SPC_plus": starting_pos_depth[0],
-                        "tau_plus": tau[0], "tau_minus": tau[1],
-                        "tau_plus_close": tau_close[0],
-                        "tau_minus_close": tau_close[1], "SPC_minus": starting_pos_depth[1],
+                        "tau_plus": tau[0], "tau_minus": tau[1], "SPC_minus": starting_pos_depth[1],
                         "cov_plus": read_depth[0], "cov_minus": read_depth[1]})
 
 		res["cov"] = res["cov_plus"].values + res["cov_minus"].values
@@ -311,11 +268,9 @@ process stats {
 		res = res.fillna(1.00)
 
 		res_plus = pd.DataFrame(
-			{"Position": res['Position'], "tau": res['tau_plus'], "tau_close": res['tau_plus_close'],
-			"pval_gamma": res['pval_plus'], "pval_gamma_adj": res['pval_plus_adj']})
+			{"Position": res['Position'], "tau": res['tau_plus'], "pval_gamma": res['pval_plus'], "pval_gamma_adj": res['pval_plus_adj']})
 		res_minus = pd.DataFrame(
-			{"Position": res['Position'], "tau": res['tau_minus'], "tau_close": res['tau_minus_close'],
-			"pval_gamma": res['pval_minus'], "pval_gamma_adj": res['pval_minus_adj']})
+			{"Position": res['Position'], "tau": res['tau_minus'], "pval_gamma": res['pval_minus'], "pval_gamma_adj": res['pval_minus_adj']})
 
 		res_plus.sort_values("tau", ascending=False, inplace=True)
 		res_minus.sort_values("tau", ascending=False, inplace=True)
@@ -354,23 +309,7 @@ process stats {
 	surrounding = 20
 	gen_len = len(f_cov)
 
-	peakMaxPlus, peakMaxMinus, TopFreqH = peakMax(starting_pos_depth, 5)
-	peakMaxPlus_norm, peakMaxMinus_norm, TopFreqH_norm = peakMax(tau, 5)
-
-	peakMaxPlus, peakOUT_forw = removeClosePeakMax(peakMaxPlus, gen_len, surrounding)
-	peakMaxMinus, peakOUT_rev = removeClosePeakMax(peakMaxMinus, gen_len, surrounding)
-	peakMaxPlus_norm, peakOUT_norm_forw = removeClosePeakMax(peakMaxPlus_norm, gen_len, surrounding)
-	peakMaxMinus_norm, peakOUT_norm_rev = removeClosePeakMax(peakMaxMinus_norm, gen_len, surrounding)
-
-	starting_pos_depth_close = starting_pos_depth[:]
-	starting_pos_depth_close[0], peakOUT_forw = addClosePeak(starting_pos_depth[0], peakOUT_forw)
-	starting_pos_depth_close[1], peakOUT_rev = addClosePeak(starting_pos_depth[1], peakOUT_rev)
-
-	tau_close = tau[:]
-	tau_close[0], peakOUT_norm_forw = addClosePeak(tau[0], peakOUT_norm_forw, 1)
-	tau_close[1], peakOUT_norm_rev = addClosePeak(tau[1], peakOUT_norm_rev, 1)
-
-	phage_norm, phage_plus_norm, phage_minus_norm = peaksDecisionTree(read_depth, starting_pos_depth, tau, tau_close)
+	phage_norm, phage_plus_norm, phage_minus_norm = peaksDecisionTree(read_depth, starting_pos_depth, tau)
 	
 	plus_significant = selectSignificant(phage_plus_norm, 1.0 / gen_len, 1.0)
 	minus_significant = selectSignificant(phage_minus_norm, 1.0 / gen_len, 1.0)
@@ -412,6 +351,10 @@ process report {
 	library("zoo")
 
 	data <- read.csv("stats.csv", quote="\\"", comment.char="")
+
+	meanDepth <- summarise(data, meanDepth = mean(cov))
+	
+	print(meanDepth)
 	
 	date <- format(Sys.Date())
 	name <- as.character("$name")
@@ -423,7 +366,7 @@ process report {
 	
 	len <- max(data['Position'])
 	window <- 0.01 * len
-  
+   
 	max_plus <- max(data['cov_plus'])
 	max_minus <- max(data['cov_minus'])
 
@@ -443,7 +386,7 @@ process report {
 
 	f_term <- top_tau_plus[1,2]
 	r_term <- top_tau_minus[1,2]
-
+	
 	if (is.na(f_term)){
 		plus_term <- "NA"
 	} else {
@@ -456,9 +399,19 @@ process report {
 		minus_term <- r_term
 	}
 
+	within_DTR <- data %>%
+		filter(Position > plus_term) %>%
+		filter(Position < minus_term)
+
+	outside_DTR <- data %>%
+		filter(Position < plus_term | Position > minus_term)
+
+	mean_DTR_depth <-  summarise(within_DTR, mean_DTR_depth = mean(cov))
+	mean_notDTR_depth <- summarise(outside_DTR, mean_notDTR_depth = mean(cov))
+
 	if (is.integer(plus_term)){
 		f_term_tau <- top_tau_plus[1,4]
-		f_term_p <- top_tau_plus[1,17]
+		f_term_p <- top_tau_plus[1,15]
 	} else {
 		f_term_tau <- "NA"
 		f_term_p <- "NA"
@@ -466,7 +419,7 @@ process report {
 
 	if (is.integer(minus_term)){
 		r_term_tau <- top_tau_minus[1,5]
-		r_term_p <- top_tau_minus[1,18]
+		r_term_p <- top_tau_minus[1,16]
 	} else {
 		r_term_tau <- "NA"
 		r_term_p <- "NA"
@@ -496,12 +449,12 @@ process report {
 			class <- "COS 5′"
 	}} else {
 		if (is.integer(plus_term) | is.integer(minus_term)) {
-			class <- "headful"
+			class <- "Headful"
 		} else {
-			class <- "headful with no pac site or mu-like"
+			class <- "Headful with no pac site, mu-like, or other"
 	}}
 
-	if (class == "headful"){
+	if (class == "Headful"){
 		if (is.integer(plus_term)){
 			pack_dir <- "Forward"
 		} else if (is.integer(minus_term)){
@@ -509,7 +462,7 @@ process report {
 		}
 	}
 	
-	if (class == "headful"){
+	if (class == "Headful"){
 		if (is.integer(plus_term)){
 			concat <- (1 - f_term_tau)/f_term_tau
 		} else if (is.integer(minus_term)){
@@ -528,6 +481,7 @@ process report {
 			colour = "Strand") +
 		scale_color_manual(values = colours) +
 		scale_x_continuous(labels = comma) +
+		scale_y_continuous(limits = c(0, NA)) +
 		guides(colour = guide_legend(override.aes = list(linewidth = 3))) +
 		theme_calc()
 
@@ -563,6 +517,7 @@ process report {
 		body_add_par(value = paste("Number of reads not aligned: ", unmappedReads), style = "Normal") %>%
 		body_add_par(value = paste("Average read length: ", aveReadLen), style = "Normal") %>%
 		body_add_par(value = paste("Maximum read length: ", maxReadLen), style = "Normal") %>%
+		body_add_par(value = paste("Average read depth: ", meanDepth), style = "Normal") %>%
 		body_add_par("", style = "Normal") %>%
 		body_add_par("Phage prediction", style = "heading 2") %>%
 		body_add_table(table, style = "table_template", first_column = TRUE) %>%
@@ -575,6 +530,7 @@ process report {
 		report <- body_add_par(report, value = paste("Cohesive sequence: ", class), style = "Normal")
 	} else if (class == "DTR"){
 		report <- body_add_par(report, value = paste("DTR length: ", term_dist), style = "Normal")
+		report <- body_add_par(report, value = paste("Average read depth within DTR: ", mean_DTR_depth), style = "Normal")
 	} else if (class == "headful"){
 		report <- body_add_par(report, value = paste("Packaging direction: ", pack_dir), style = "Normal")
 		report <- body_add_par(report, value = paste("Number of genome copies per concatamer: ", concat), style = "Normal")
@@ -593,6 +549,22 @@ process report {
 	"""
 }
 
+process doc2pdf {
+	publishDir "${params.outdir}", mode: 'copy', overwrite: true
+	
+	input:
+		path report
+		path outdir
+		
+	output:
+		path 'report.pdf', optional: true
+	
+	script:
+	"""
+	libreoffice --headless --convert-to pdf  $report --outdir $params.outdir
+	"""	
+}
+
 workflow {
 	len_ch = rawSeq(ref_ch)
 	aln_ch = mapping(seq_ch, ref_ch, plat_ch)
@@ -602,5 +574,6 @@ workflow {
 	cov_ch = cov(sep_ch)
 	tau_ch = tau(bed_ch, cov_ch, len_ch)
 	stats_ch = stats(tau_ch)
-	report(stats_ch, ref_ch, seq_ch, name_ch, plat_ch, alnstats_ch)
+	report_ch = report(stats_ch, ref_ch, seq_ch, name_ch, plat_ch, alnstats_ch)
+	doc2pdf(report_ch, outdir_ch)
 }
