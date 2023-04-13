@@ -1,25 +1,23 @@
 #!/usr/bin/env nextflow
 
-ref_ch = Channel.of(params.fasta)
-seq_ch = Channel.of(params.input)
+ref_ch = Channel.of(params.reference)
+seq_ch = Channel.of(params.fastq)
 plat_ch = Channel.of(params.seqplat)
 name_ch = Channel.of(params.name)
-outdir_ch = Channel.of(params.outdir)
-
-println "\nReference: $params.fasta\nSequence reads: $params.input\n"
+outdir_ch = Channel.of(params.out_dir)
 
 // This process extracts the raw sequence from the fasta file, removing the header
 // The output is a text file with just the nucleotide sequence of the reference genome
 process rawSeq {
 	input:
-		path fasta
+		path reference
 	
 	output:
 		path 'rawseq.txt'
 		
 	script:
 	"""
-	grep -v ">" $fasta | tr -d "\\n" > rawseq.txt
+	grep -v ">" $reference | tr -d "\\n" > rawseq.txt
 	"""
 }
 
@@ -29,8 +27,8 @@ process rawSeq {
 // The output is a .sam file of the alignment
 process mapping {
 	input:
-		path input
-		path fasta
+		path fastq
+		path reference
 		val seqplat
 
 	output:
@@ -39,12 +37,12 @@ process mapping {
 	script:
 		if( seqplat == 'nanopore' )
 			"""
-			minimap2 -ax map-ont $params.fasta $params.input > aln.sam
+			minimap2 -ax map-ont $params.reference $params.fastq > aln.sam
 			"""
 		
 		else if( seqplat == 'illumina' )
 			"""
-			minimap2 -asr $params.fasta $params.input > aln.sam
+			minimap2 -asr $params.reference $params.fastq > aln.sam
 			"""
 
 		else 
@@ -126,7 +124,7 @@ process cov {
 
 
 process tau {
-	publishDir "${params.outdir}", mode: 'copy', overwrite: true
+	publishDir "${params.out_dir}", mode: 'copy', overwrite: true
 	
 	input:
 		path aln_f
@@ -189,7 +187,7 @@ process tau {
 }
 
 process stats {
-	publishDir "${params.outdir}", mode: 'copy', overwrite: true
+	publishDir "${params.out_dir}", mode: 'copy', overwrite: true
 
 	input:
 		path tau
@@ -319,11 +317,11 @@ process stats {
 }
 
 process report {
-	publishDir "${params.outdir}", mode: 'copy', overwrite: true
+	publishDir "${params.out_dir}", mode: 'copy', overwrite: true
 	
 	input:
-		path input
-		path fasta
+		path fastq
+		path reference
 		path stats
 		val name
 		val seqplat
@@ -408,6 +406,8 @@ process report {
 
 	mean_DTR_depth <-  summarise(within_DTR, mean_DTR_depth = mean(cov))
 	mean_notDTR_depth <- summarise(outside_DTR, mean_notDTR_depth = mean(cov))
+	
+	DTR_depth_ratio <- mean_DTR_depth / mean_notDTR_depth
 
 	if (is.integer(plus_term)){
 		f_term_tau <- top_tau_plus[1,4]
@@ -507,8 +507,8 @@ process report {
 		body_add_par("", style = "Normal") %>%
 		body_add_par("Run details", style = "heading 2") %>%
 		body_add_par(value = paste("Generated on: ", date), style = "Normal") %>%
-		body_add_par(value = paste("Input sequences: ", "$params.input"), style = "Normal") %>%
-		body_add_par(value = paste("Reference genome: ", "$params.fasta"), style = "Normal") %>%
+		body_add_par(value = paste("Input sequences: ", "$params.fastq"), style = "Normal") %>%
+		body_add_par(value = paste("Reference genome: ", "$params.reference"), style = "Normal") %>%
 		body_add_par(value = paste("Reference genome length: ", len), style = "Normal") %>%
 		body_add_par("Alignment details", style = "heading 2") %>%
 		body_add_par(value = paste("Sequencing platform:", "$params.seqplat"), style = "Normal") %>%
@@ -517,7 +517,7 @@ process report {
 		body_add_par(value = paste("Number of reads not aligned: ", unmappedReads), style = "Normal") %>%
 		body_add_par(value = paste("Average read length: ", aveReadLen), style = "Normal") %>%
 		body_add_par(value = paste("Maximum read length: ", maxReadLen), style = "Normal") %>%
-		body_add_par(value = paste("Average read depth: ", meanDepth), style = "Normal") %>%
+		body_add_par(value = paste("Average read depth: ", as.integer(meanDepth)), style = "Normal") %>%
 		body_add_par("", style = "Normal") %>%
 		body_add_par("Phage prediction", style = "heading 2") %>%
 		body_add_table(table, style = "table_template", first_column = TRUE) %>%
@@ -531,6 +531,8 @@ process report {
 	} else if (class == "DTR"){
 		report <- body_add_par(report, value = paste("DTR length: ", term_dist), style = "Normal")
 		report <- body_add_par(report, value = paste("Average read depth within DTR: ", mean_DTR_depth), style = "Normal")
+		report <- body_add_par(report, value = paste("DTR read depth / non-DTR read depth: ", DTR_depth_ratio), style = "Normal")
+		report <- body_add_par(report, value = "If there is more the 2x the read depth within the predicted DTR, this is consistent with DTR packaging", style = "Normal")
 	} else if (class == "headful"){
 		report <- body_add_par(report, value = paste("Packaging direction: ", pack_dir), style = "Normal")
 		report <- body_add_par(report, value = paste("Number of genome copies per concatamer: ", concat), style = "Normal")
@@ -550,18 +552,18 @@ process report {
 }
 
 process doc2pdf {
-	publishDir "${params.outdir}", mode: 'copy', overwrite: true
+	publishDir "${params.out_dir}", mode: 'copy', overwrite: true
 	
 	input:
 		path report
-		path outdir
+		path out_dir
 		
 	output:
 		path 'report.pdf', optional: true
 	
 	script:
 	"""
-	libreoffice --headless --convert-to pdf  $report --outdir $params.outdir
+	libreoffice --headless --convert-to pdf  $report --outdir $params.out_dir
 	"""	
 }
 

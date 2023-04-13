@@ -1,58 +1,29 @@
 {
-    "$schema": "http://json-schema.org/draft-07/schema",
-    "$id": "https://raw.githubusercontent.com/wf-NanoTerm/master/nextflow_schema.json",
-    "title": "wf-NanoTerm pipeline parameters",
-    "description": "Determine phage termini from nanopore sequencing",
-    "type": "object",
-    "properties": {
-        "seqplat": {
-            "type": "string",
-            "default": "nanopore",
-            "description": "Sequencing platform (options are nanopore (default) and illumina)"
-        },
-        "name": {
-            "type": "string",
-            "default": null
-        }
+  "$schema": "http://json-schema.org/draft-07/schema",
+  "$id": "https://raw.githubusercontent.com/wf-NanoTerm/master/nextflow_schema.json",
+  "title": "wf-NanoTerm pipeline parameters",
+  "description": "Determine phage termini from nanopore sequencing",
+  "type": "object",
+  "properties": {
+    "fastq": {
+      "type": "string",
+      "default": null
     },
-    "definitions": {
-        "input_output_parameters": {
-            "title": "Input/Output parameters",
-            "type": "object",
-            "description": "",
-            "default": "",
-            "properties": {
-                "fastq": {
-                    "type": "string",
-                    "default": null,
-                    "pattern": "^\\S+\\.fastq.gz",
-                    "format": "file-path"
-                },
-                "reference": {
-                    "type": "string",
-                    "default": null,
-                    "pattern": "^\\S+\\.fasta",
-                    "format": "file-path"
-                },
-                "out_dir": {
-                    "type": "string",
-                    "default": "output",
-                    "description": "Output directory"
-                }
-            },
-            "required": [
-                "fastq",
-                "reference",
-                "out_dir"
-            ]
-        }
+    "reference": {
+      "type": "string",
+      "default": null
     },
-    "allOf": [
-        {
-            "$ref": "#/definitions/input_output_parameters"
-        }
-    ],
-    "required": [
-        "name"
-    ]
+    "out_dir": {
+      "type": "string",
+      "default": "output"
+    },
+    "seqplat": {
+      "type": "string",
+      "default": "nanopore"
+    },
+    "name": {
+      "type": "string",
+      "default": null
+    }
+  }
 }
