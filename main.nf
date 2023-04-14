@@ -6,6 +6,20 @@ plat_ch = Channel.of(params.seqplat)
 name_ch = Channel.of(params.name)
 outdir_ch = Channel.of(params.out_dir)
 
+// This process concatenates all of the fastq.gz files in the fastq input directory into one file containing all sequences
+process catFastq {
+	input:
+		path fastq
+	
+	output:
+		path 'all.fastq.gz'
+		
+	script:
+	"""
+	cat $fastq/*.fastq.gz > all.fastq.gz
+	"""
+}
+
 // This process extracts the raw sequence from the fasta file, removing the header
 // The output is a text file with just the nucleotide sequence of the reference genome
 process rawSeq {
@@ -21,28 +35,139 @@ process rawSeq {
 	"""
 }
 
+process refLen {
+	input:
+		path rawseq
+		
+	output:
+		env genLen
+		
+	script:
+	"""
+	genLen=`wc -m < $rawseq`
+	"""
+}
+
+// This process strips all new lines from the fasta file, except between the header and the sequence
+process refSeq {
+	input:
+		path reference
+	
+	output:
+		path 'refseq.fasta'
+		
+	script:
+	"""
+	grep ">" $reference > refseq.fasta
+	grep -v ">" $reference | tr -d "\\n" >> refseq.fasta
+	"""
+}
+
+// This process produces 5 circular permutations of the reference genome
+process permute {
+	input:
+		path refseq
+		
+	output:
+		path 'circular_permutation1.fasta'
+		path 'circular_permutation2.fasta'
+		path 'circular_permutation3.fasta'
+		path 'circular_permutation4.fasta'
+		path 'circular_permutation5.fasta'
+	
+	script:
+	"""
+	#!/usr/bin/env python3
+
+	f = open('refseq.fasta', 'r')
+	next(f)
+	for line in f:
+		refseq = str(line.rstrip())
+	f.close()
+
+	L = len(refseq)
+	br=int(L/6)
+
+	break1 = br
+	break2 = br*2
+	break3 = br*3
+	break4 = br*4
+	break5 = br*5
+
+	seq1 = refseq[break1:] + refseq[:break1]
+	seq2 = refseq[break2:] + refseq[:break2]
+	seq3 = refseq[break3:] + refseq[:break3]
+	seq4 = refseq[break4:] + refseq[:break4]
+	seq5 = refseq[break5:] + refseq[:break5]
+
+	sourceFile = open('circular_permutation1.fasta', 'w')
+	print('>circular_permutation_1', file = sourceFile)
+	print(seq1, file = sourceFile)
+	sourceFile.close()
+
+	sourceFile = open('circular_permutation2.fasta', 'w')
+	print('>circular_permutation_2', file = sourceFile)
+	print(seq2, file = sourceFile)
+	sourceFile.close()
+
+	sourceFile = open('circular_permutation3.fasta', 'w')
+	print('>circular_permutation_3', file = sourceFile)
+	print(seq3, file = sourceFile)
+	sourceFile.close()
+
+	sourceFile = open('circular_permutation4.fasta', 'w')
+	print('>circular_permutation_4', file = sourceFile)
+	print(seq4, file = sourceFile)
+	sourceFile.close()
+
+	sourceFile = open('circular_permutation5.fasta', 'w')
+	print('>circular_permutation_5', file = sourceFile)
+	print(seq5, file = sourceFile)
+	sourceFile.close()
+	"""
+}
 
 // This process maps the input fastq.gz file against the reference genome using minimap2
 // This process can be adjusted to suit the sequencing platform used
 // The output is a .sam file of the alignment
 process mapping {
 	input:
-		path fastq
-		path reference
 		val seqplat
+		path all
+		path refseq
+		path circular_permutation1
+		path circular_permutation2
+		path circular_permutation3
+		path circular_permutation4
+		path circular_permutation5
 
 	output:
 		path 'aln.sam'
+		path 'aln_circ1.sam'
+		path 'aln_circ2.sam'
+		path 'aln_circ3.sam'
+		path 'aln_circ4.sam'
+		path 'aln_circ5.sam'
 		
 	script:
 		if( seqplat == 'nanopore' )
 			"""
-			minimap2 -ax map-ont $params.reference $params.fastq > aln.sam
+			minimap2 -ax map-ont $params.reference $all > aln.sam
+			minimap2 -ax map-ont $circular_permutation1 $all  > aln_circ1.sam
+			minimap2 -ax map-ont $circular_permutation2 $all  > aln_circ2.sam
+			minimap2 -ax map-ont $circular_permutation3 $all  > aln_circ3.sam
+			minimap2 -ax map-ont $circular_permutation4 $all > aln_circ4.sam
+			minimap2 -ax map-ont $circular_permutation5 $all  > aln_circ5.sam
 			"""
 		
 		else if( seqplat == 'illumina' )
 			"""
 			minimap2 -asr $params.reference $params.fastq > aln.sam
+			minimap2 -asr $circular_permutation1 $all > aln_circ1.sam
+			minimap2 -asr $circular_permutation2 $all  > aln_circ2.sam
+			minimap2 -asr $circular_permutation3 $all > aln_circ3.sam
+			minimap2 -asr $circular_permutation4 $all  > aln_circ4.sam
+			minimap2 -asr $circular_permutation5 $pall  > aln_circ5.sam
 			"""
 
 		else 
@@ -52,6 +177,11 @@ process mapping {
 process alignStats {
 	input:
 		path aln
+		path aln_circ1
+		path aln_circ2
+		path aln_circ3
+		path aln_circ4
+		path aln_circ5
 		
 	output:
 		env totalReads
@@ -75,10 +205,25 @@ process alignStats {
 process strandSep {
 	input:
 		path aln
+		path aln_circ1
+		path aln_circ2
+		path aln_circ3
+		path aln_circ4
+		path aln_circ5
 		
 	output:
 		path 'aln_f_sorted.bam'
 		path 'aln_r_sorted.bam'
+		path 'aln_f_sorted_circ1.bam'
+		path 'aln_r_sorted_circ1.bam'
+		path 'aln_f_sorted_circ2.bam'
+		path 'aln_r_sorted_circ2.bam'
+		path 'aln_f_sorted_circ3.bam'
+		path 'aln_r_sorted_circ3.bam'
+		path 'aln_f_sorted_circ4.bam'
+		path 'aln_r_sorted_circ4.bam'
+		path 'aln_f_sorted_circ5.bam'
+		path 'aln_r_sorted_circ5.bam'
 
 	script:
 		"""
@@ -87,6 +232,36 @@ process strandSep {
 		
 		samtools view -f 16 -b $aln > aln_r.bam
 		samtools sort aln_r.bam > aln_r_sorted.bam
+		
+		samtools view -F 16 -b $aln_circ1 > aln_f_circ1.bam
+		samtools sort aln_f_circ1.bam > aln_f_sorted_circ1.bam
+		
+		samtools view -f 16 -b $aln_circ1 > aln_r_circ1.bam
+		samtools sort aln_r_circ1.bam > aln_r_sorted_circ1.bam
+
+		samtools view -F 16 -b $aln_circ2 > aln_f_circ2.bam
+		samtools sort aln_f_circ2.bam > aln_f_sorted_circ2.bam
+		
+		samtools view -f 16 -b $aln_circ2 > aln_r_circ2.bam
+		samtools sort aln_r_circ2.bam > aln_r_sorted_circ2.bam
+		
+		samtools view -F 16 -b $aln_circ3 > aln_f_circ3.bam
+		samtools sort aln_f_circ3.bam > aln_f_sorted_circ3.bam
+		
+		samtools view -f 16 -b $aln_circ3 > aln_r_circ3.bam
+		samtools sort aln_r_circ3.bam > aln_r_sorted_circ3.bam
+		
+		samtools view -F 16 -b $aln_circ4 > aln_f_circ4.bam
+		samtools sort aln_f_circ4.bam > aln_f_sorted_circ4.bam
+		
+		samtools view -f 16 -b $aln_circ4 > aln_r_circ4.bam
+		samtools sort aln_r_circ4.bam > aln_r_sorted_circ4.bam
+		
+		samtools view -F 16 -b $aln_circ5 > aln_f_circ5.bam
+		samtools sort aln_f_circ5.bam > aln_f_sorted_circ5.bam
+		
+		samtools view -f 16 -b $aln_circ5 > aln_r_circ5.bam
+		samtools sort aln_r_circ5.bam > aln_r_sorted_circ5.bam
 		"""
 }
 
@@ -94,31 +269,101 @@ process bed {
 	input:
 		path aln_f_sorted
 		path aln_r_sorted
+		path aln_f_sorted_circ1
+		path aln_r_sorted_circ1
+		path aln_f_sorted_circ2
+		path aln_r_sorted_circ2
+		path aln_f_sorted_circ3
+		path aln_r_sorted_circ3
+		path aln_f_sorted_circ4
+		path aln_r_sorted_circ4
+		path aln_f_sorted_circ5
+		path aln_r_sorted_circ5
 		
 	output:
 		path 'aln_f.bed'
 		path 'aln_r.bed'
+		path 'aln_f_circ1.bed'
+		path 'aln_r_circ1.bed'
+		path 'aln_f_circ2.bed'
+		path 'aln_r_circ2.bed'
+		path 'aln_f_circ3.bed'
+		path 'aln_r_circ3.bed'
+		path 'aln_f_circ4.bed'
+		path 'aln_r_circ4.bed'
+		path 'aln_f_circ5.bed'
+		path 'aln_r_circ5.bed'
 		
 	script:
 	"""
 	bamToBed -i $aln_f_sorted > aln_f.bed
 	bamToBed -i $aln_r_sorted > aln_r.bed
-	"""
+	
+	bamToBed -i $aln_f_sorted_circ1 > aln_f_circ1.bed
+	bamToBed -i $aln_r_sorted_circ1 > aln_r_circ1.bed
+	
+	bamToBed -i $aln_f_sorted_circ2 > aln_f_circ2.bed
+	bamToBed -i $aln_r_sorted_circ2 > aln_r_circ2.bed
+	
+	bamToBed -i $aln_f_sorted_circ3 > aln_f_circ3.bed
+	bamToBed -i $aln_r_sorted_circ3 > aln_r_circ3.bed
+	
+	bamToBed -i $aln_f_sorted_circ4 > aln_f_circ4.bed
+	bamToBed -i $aln_r_sorted_circ4 > aln_r_circ4.bed
+	
+	bamToBed -i $aln_f_sorted_circ5 > aln_f_circ5.bed
+	bamToBed -i $aln_r_sorted_circ5 > aln_r_circ5.bed
+		"""
 }
 
 process cov {	
 	input:
 		path aln_f_sorted
 		path aln_r_sorted
+		path aln_f_sorted_circ1
+		path aln_r_sorted_circ1
+		path aln_f_sorted_circ2
+		path aln_r_sorted_circ2
+		path aln_f_sorted_circ3
+		path aln_r_sorted_circ3
+		path aln_f_sorted_circ4
+		path aln_r_sorted_circ4
+		path aln_f_sorted_circ5
+		path aln_r_sorted_circ5
 		
 	output:
 		path 'aln_f_cov.txt'
 		path 'aln_r_cov.txt'
+		path 'aln_f_cov_circ1.txt'
+		path 'aln_r_cov_circ1.txt'
+		path 'aln_f_cov_circ2.txt'
+		path 'aln_r_cov_circ2.txt'
+		path 'aln_f_cov_circ3.txt'
+		path 'aln_r_cov_circ3.txt'
+		path 'aln_f_cov_circ4.txt'
+		path 'aln_r_cov_circ4.txt'
+		path 'aln_f_cov_circ5.txt'
+		path 'aln_r_cov_circ5.txt'
 	
 	script:
 	"""
 	samtools depth -a -d 0 -o aln_f_cov.txt $aln_f_sorted
 	samtools depth -a -d 0 -o aln_r_cov.txt $aln_r_sorted
+	
+	samtools depth -a -d 0 -o aln_f_cov_circ1.txt $aln_f_sorted_circ1
+	samtools depth -a -d 0 -o aln_r_cov_circ1.txt $aln_r_sorted_circ1
+	
+	samtools depth -a -d 0 -o aln_f_cov_circ2.txt $aln_f_sorted_circ2
+	samtools depth -a -d 0 -o aln_r_cov_circ2.txt $aln_r_sorted_circ2
+	
+	samtools depth -a -d 0 -o aln_f_cov_circ3.txt $aln_f_sorted_circ3
+	samtools depth -a -d 0 -o aln_r_cov_circ3.txt $aln_r_sorted_circ3
+	
+	samtools depth -a -d 0 -o aln_f_cov_circ4.txt $aln_f_sorted_circ4
+	samtools depth -a -d 0 -o aln_r_cov_circ4.txt $aln_r_sorted_circ4
+	
+	samtools depth -a -d 0 -o aln_f_cov_circ5.txt $aln_f_sorted_circ5
+	samtools depth -a -d 0 -o aln_r_cov_circ5.txt $aln_r_sorted_circ5
 	"""
 }
 
@@ -127,18 +372,46 @@ process tau {
 	publishDir "${params.out_dir}", mode: 'copy', overwrite: true
 	
 	input:
+		val genLen
 		path aln_f
 		path aln_r
+		path aln_f_circ1
+		path aln_r_circ1
+		path aln_f_circ2
+		path aln_r_circ2
+		path aln_f_circ3
+		path aln_r_circ3
+		path aln_f_circ4
+		path aln_r_circ4
+		path aln_f_circ5
+		path aln_r_circ5
 		path aln_f_cov
 		path aln_r_cov
-		path fasta
+		path aln_f_cov_circ1
+		path aln_r_cov_circ1
+		path aln_f_cov_circ2
+		path aln_r_cov_circ2
+		path aln_f_cov_circ3
+		path aln_r_cov_circ3
+		path aln_f_cov_circ4
+		path aln_r_cov_circ4
+		path aln_f_cov_circ5
+		path aln_r_cov_circ5
 		
 	output:
 		path 'tau.csv'
+		path 'tau_circ1.csv'
+		path 'tau_circ2.csv'
+		path 'tau_circ3.csv'
+		path 'tau_circ4.csv'
+		path 'tau_circ5.csv'
 		
 	script:
 	"""
 	#!/usr/bin/env Rscript
+
+	len <- $genLen
+	pos <- seq(from = 1,to = len, by = 1)
 
 	f_bed <- read.table("$aln_f", quote="\\"", comment.char="",
                     colClasses=c("character","numeric","numeric","NULL","NULL","NULL"))
@@ -150,6 +423,57 @@ process tau {
 	r_bed <- setNames(r_bed, c("chr","start","end"))
 	r_bed['start'] <- r_bed['start'] + 1
 
+	f_bed_circ1 <- read.table("$aln_f_circ1", quote="\\"", comment.char="",
+                    colClasses=c("character","numeric","numeric","NULL","NULL","NULL"))
+	f_bed_circ1 <- setNames(f_bed_circ1, c("chr","start","end"))
+	f_bed_circ1['start'] <- f_bed_circ1['start'] + 1
+
+	r_bed_circ1 <- read.table("$aln_r_circ1", quote="\\"", comment.char="",
+                    colClasses=c("character","numeric","numeric","NULL","NULL","NULL"))
+	r_bed_circ1 <- setNames(r_bed_circ1, c("chr","start","end"))
+	r_bed_circ1['start'] <- r_bed_circ1['start'] + 1
+
+	f_bed_circ2 <- read.table("$aln_f_circ2", quote="\\"", comment.char="",
+                    colClasses=c("character","numeric","numeric","NULL","NULL","NULL"))
+	f_bed_circ2 <- setNames(f_bed_circ2, c("chr","start","end"))
+	f_bed_circ2['start'] <- f_bed_circ2['start'] + 1
+
+	r_bed_circ2 <- read.table("$aln_r_circ2", quote="\\"", comment.char="",
+                    colClasses=c("character","numeric","numeric","NULL","NULL","NULL"))
+	r_bed_circ2 <- setNames(r_bed_circ2, c("chr","start","end"))
+	r_bed_circ2['start'] <- r_bed_circ2['start'] + 1
+
+	f_bed_circ3 <- read.table("$aln_f_circ3", quote="\\"", comment.char="",
+                    colClasses=c("character","numeric","numeric","NULL","NULL","NULL"))
+	f_bed_circ3 <- setNames(f_bed_circ3, c("chr","start","end"))
+	f_bed_circ3['start'] <- f_bed_circ3['start'] + 1
+
+	r_bed_circ3 <- read.table("$aln_r_circ3", quote="\\"", comment.char="",
+                    colClasses=c("character","numeric","numeric","NULL","NULL","NULL"))
+	r_bed_circ3 <- setNames(r_bed_circ3, c("chr","start","end"))
+	r_bed_circ3['start'] <- r_bed_circ3['start'] + 1
+	
+	f_bed_circ4 <- read.table("$aln_f_circ4", quote="\\"", comment.char="",
+                    colClasses=c("character","numeric","numeric","NULL","NULL","NULL"))
+	f_bed_circ4 <- setNames(f_bed_circ4, c("chr","start","end"))
+	f_bed_circ4['start'] <- f_bed_circ4['start'] + 1
+
+	r_bed_circ4 <- read.table("$aln_r_circ4", quote="\\"", comment.char="",
+                    colClasses=c("character","numeric","numeric","NULL","NULL","NULL"))
+	r_bed_circ4 <- setNames(r_bed_circ4, c("chr","start","end"))
+	r_bed_circ4['start'] <- r_bed_circ4['start'] + 1
+	
+	f_bed_circ5 <- read.table("$aln_f_circ5", quote="\\"", comment.char="",
+                    colClasses=c("character","numeric","numeric","NULL","NULL","NULL"))
+	f_bed_circ5 <- setNames(f_bed_circ5, c("chr","start","end"))
+	f_bed_circ5['start'] <- f_bed_circ5['start'] + 1
+
+	r_bed_circ5 <- read.table("$aln_r_circ5", quote="\\"", comment.char="",
+                    colClasses=c("character","numeric","numeric","NULL","NULL","NULL"))
+	r_bed_circ5 <- setNames(r_bed_circ5, c("chr","start","end"))
+	r_bed_circ5['start'] <- r_bed_circ5['start'] + 1
+
+
 	f_cov <- read.table("$aln_f_cov", quote="\\"", comment.char="",
                     colClasses=c("character","numeric","numeric"))
 	f_cov <- setNames(f_cov, c("chr","pos","cov"))
@@ -160,9 +484,56 @@ process tau {
 	r_cov <- setNames(r_cov, c("chr","pos","cov"))
 	r_cov['strand'] <- "r"
 	
-	fa <- scan(file="$fasta", what="string")
-	len <- nchar(fa)
-	pos <- seq(from = 1,to = len, by = 1)
+	f_cov_circ1 <- read.table("$aln_f_cov_circ1", quote="\\"", comment.char="",
+                    colClasses=c("character","numeric","numeric"))
+	f_cov_circ1 <- setNames(f_cov_circ1, c("chr","pos","cov"))
+	f_cov_circ1['strand'] <- "f"
+
+	r_cov_circ1 <- read.table("$aln_r_cov_circ1", quote="\\"", comment.char="",
+                    colClasses=c("character","numeric","numeric"))
+	r_cov_circ1 <- setNames(r_cov_circ1, c("chr","pos","cov"))
+	r_cov_circ1['strand'] <- "r"
+	
+	f_cov_circ2 <- read.table("$aln_f_cov_circ2", quote="\\"", comment.char="",
+                    colClasses=c("character","numeric","numeric"))
+	f_cov_circ2 <- setNames(f_cov_circ2, c("chr","pos","cov"))
+	f_cov_circ2['strand'] <- "f"
+
+	r_cov_circ2 <- read.table("$aln_r_cov_circ2", quote="\\"", comment.char="",
+                    colClasses=c("character","numeric","numeric"))
+	r_cov_circ2 <- setNames(r_cov_circ2, c("chr","pos","cov"))
+	r_cov_circ2['strand'] <- "r"
+
+	f_cov_circ3 <- read.table("$aln_f_cov_circ3", quote="\\"", comment.char="",
+                    colClasses=c("character","numeric","numeric"))
+	f_cov_circ3 <- setNames(f_cov_circ3, c("chr","pos","cov"))
+	f_cov_circ3['strand'] <- "f"
+
+	r_cov_circ3 <- read.table("$aln_r_cov_circ3", quote="\\"", comment.char="",
+                    colClasses=c("character","numeric","numeric"))
+	r_cov_circ3 <- setNames(r_cov_circ3, c("chr","pos","cov"))
+	r_cov_circ3['strand'] <- "r"
+
+	f_cov_circ4 <- read.table("$aln_f_cov_circ4", quote="\\"", comment.char="",
+                    colClasses=c("character","numeric","numeric"))
+	f_cov_circ4 <- setNames(f_cov_circ4, c("chr","pos","cov"))
+	f_cov_circ4['strand'] <- "f"
+
+	r_cov_circ4 <- read.table("$aln_r_cov_circ4", quote="\\"", comment.char="",
+                    colClasses=c("character","numeric","numeric"))
+	r_cov_circ4 <- setNames(r_cov_circ4, c("chr","pos","cov"))
+	r_cov_circ4['strand'] <- "r"	
+
+	f_cov_circ5 <- read.table("$aln_f_cov_circ5", quote="\\"", comment.char="",
+                    colClasses=c("character","numeric","numeric"))
+	f_cov_circ5 <- setNames(f_cov_circ5, c("chr","pos","cov"))
+	f_cov_circ5['strand'] <- "f"
+
+	r_cov_circ5 <- read.table("$aln_r_cov_circ5", quote="\\"", comment.char="",
+                    colClasses=c("character","numeric","numeric"))
+	r_cov_circ5 <- setNames(r_cov_circ5, c("chr","pos","cov"))
+	r_cov_circ5['strand'] <- "r"	
+		
 	
 	f_spc <- data.frame(pos = pos, SPC = 0)
 	r_spc <- data.frame(pos = pos, SPC = 0)
@@ -179,10 +550,99 @@ process tau {
 	r_tau <- merge(r_cov, r_spc, by="pos")
 	
 	tau <- rbind(f_tau, r_tau)
-
 	tau['tau'] <- tau['SPC'] / tau['cov']
-	
 	write.csv(tau, "tau.csv")
+	
+	f_spc_circ1 <- data.frame(pos = pos, SPC = 0)
+	r_spc_circ1 <- data.frame(pos = pos, SPC = 0)
+
+	for (nt in pos){
+		f_spc_circ1[nt,'SPC'] <- length(which(f_bed_circ1['start']==nt))
+		}
+	
+	for (nt in pos){
+		r_spc_circ1[nt,'SPC'] <- length(which(r_bed_circ1['end']==nt))
+		}
+	
+	f_tau_circ1 <- merge(f_cov_circ1, f_spc_circ1, by="pos")
+	r_tau_circ1 <- merge(r_cov_circ1, r_spc_circ1, by="pos")
+	
+	tau_circ1 <- rbind(f_tau_circ1, r_tau_circ1)
+	tau_circ1['tau'] <- tau_circ1['SPC'] / tau_circ1['cov']
+	write.csv(tau_circ1, "tau_circ1.csv")
+	
+	f_spc_circ2 <- data.frame(pos = pos, SPC = 0)
+	r_spc_circ2 <- data.frame(pos = pos, SPC = 0)
+
+	for (nt in pos){
+		f_spc_circ2[nt,'SPC'] <- length(which(f_bed_circ2['start']==nt))
+		}
+	
+	for (nt in pos){
+		r_spc_circ2[nt,'SPC'] <- length(which(r_bed_circ2['end']==nt))
+		}
+	
+	f_tau_circ2 <- merge(f_cov_circ2, f_spc_circ2, by="pos")
+	r_tau_circ2 <- merge(r_cov_circ2, r_spc_circ2, by="pos")
+	
+	tau_circ2 <- rbind(f_tau_circ2, r_tau_circ2)
+	tau_circ2['tau'] <- tau_circ2['SPC'] / tau_circ2['cov']
+	write.csv(tau_circ2, "tau_circ2.csv")
+
+	f_spc_circ3 <- data.frame(pos = pos, SPC = 0)
+	r_spc_circ3 <- data.frame(pos = pos, SPC = 0)
+
+	for (nt in pos){
+		f_spc_circ3[nt,'SPC'] <- length(which(f_bed_circ3['start']==nt))
+		}
+	
+	for (nt in pos){
+		r_spc_circ3[nt,'SPC'] <- length(which(r_bed_circ3['end']==nt))
+		}
+	
+	f_tau_circ3 <- merge(f_cov_circ3, f_spc_circ3, by="pos")
+	r_tau_circ3 <- merge(r_cov_circ3, r_spc_circ3, by="pos")
+	
+	tau_circ3 <- rbind(f_tau_circ3, r_tau_circ3)
+	tau_circ3['tau'] <- tau_circ3['SPC'] / tau_circ3['cov']
+	write.csv(tau_circ3, "tau_circ3.csv")
+
+	f_spc_circ4 <- data.frame(pos = pos, SPC = 0)
+	r_spc_circ4 <- data.frame(pos = pos, SPC = 0)
+
+	for (nt in pos){
+		f_spc_circ4[nt,'SPC'] <- length(which(f_bed_circ4['start']==nt))
+		}
+	
+	for (nt in pos){
+		r_spc_circ4[nt,'SPC'] <- length(which(r_bed_circ4['end']==nt))
+		}
+	
+	f_tau_circ4 <- merge(f_cov_circ4, f_spc_circ4, by="pos")
+	r_tau_circ4 <- merge(r_cov_circ4, r_spc_circ4, by="pos")
+	
+	tau_circ4 <- rbind(f_tau_circ4, r_tau_circ4)
+	tau_circ4['tau'] <- tau_circ4['SPC'] / tau_circ4['cov']
+	write.csv(tau_circ4, "tau_circ4.csv")
+	
+	f_spc_circ5 <- data.frame(pos = pos, SPC = 0)
+	r_spc_circ5 <- data.frame(pos = pos, SPC = 0)
+
+	for (nt in pos){
+		f_spc_circ5[nt,'SPC'] <- length(which(f_bed_circ5['start']==nt))
+		}
+	
+	for (nt in pos){
+		r_spc_circ5[nt,'SPC'] <- length(which(r_bed_circ5['end']==nt))
+		}
+	
+	f_tau_circ5 <- merge(f_cov_circ5, f_spc_circ5, by="pos")
+	r_tau_circ5 <- merge(r_cov_circ5, r_spc_circ5, by="pos")
+	
+	tau_circ5 <- rbind(f_tau_circ5, r_tau_circ5)
+	tau_circ5['tau'] <- tau_circ5['SPC'] / tau_circ5['cov']
+	write.csv(tau_circ5, "tau_circ5.csv")
+	
 	"""	
 }
 
@@ -191,6 +651,11 @@ process stats {
 
 	input:
 		path tau
+		path tau_circ1
+		path tau_circ2
+		path tau_circ3
+		path tau_circ4
+		path tau_circ5
 		
 	output:
 		path 'stats.csv'
@@ -568,14 +1033,18 @@ process doc2pdf {
 }
 
 workflow {
-	len_ch = rawSeq(ref_ch)
-	aln_ch = mapping(seq_ch, ref_ch, plat_ch)
+	allseq_ch = catFastq(seq_ch)
+	raw_ch = rawSeq(ref_ch)
+	len_ch = refLen(raw_ch)
+	refseq_ch = refSeq(ref_ch)
+	circ_ch = permute(refseq_ch)
+	aln_ch = mapping(plat_ch, allseq_ch, refseq_ch, circ_ch)
 	alnstats_ch = alignStats(aln_ch)
 	sep_ch = strandSep(aln_ch)
 	bed_ch = bed(sep_ch)
 	cov_ch = cov(sep_ch)
-	tau_ch = tau(bed_ch, cov_ch, len_ch)
+	tau_ch = tau(len_ch, bed_ch, cov_ch)
 	stats_ch = stats(tau_ch)
-	report_ch = report(stats_ch, ref_ch, seq_ch, name_ch, plat_ch, alnstats_ch)
+	report_ch = report(stats_ch, ref_ch, refseq_ch, name_ch, plat_ch, alnstats_ch)
 	doc2pdf(report_ch, outdir_ch)
 }
