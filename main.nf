@@ -31,7 +31,7 @@ process rawSeq {
 		
 	script:
 	"""
-	grep -v ">" $reference | tr -d "\\n" > rawseq.txt
+	grep -v ">" $reference | tr -d "[:space:]" > rawseq.txt
 	"""
 }
 
@@ -94,6 +94,8 @@ process permute {
 	break4 = br*4
 	break5 = br*5
 
+	print(break4)
+
 	seq1 = refseq[break1:] + refseq[:break1]
 	seq2 = refseq[break2:] + refseq[:break2]
 	seq3 = refseq[break3:] + refseq[:break3]
@@ -153,21 +155,21 @@ process mapping {
 		if( seqplat == 'nanopore' )
 			"""
 			minimap2 -ax map-ont $params.reference $all > aln.sam
-			minimap2 -ax map-ont $circular_permutation1 $all  > aln_circ1.sam
-			minimap2 -ax map-ont $circular_permutation2 $all  > aln_circ2.sam
-			minimap2 -ax map-ont $circular_permutation3 $all  > aln_circ3.sam
+			minimap2 -ax map-ont $circular_permutation1 $all > aln_circ1.sam
+			minimap2 -ax map-ont $circular_permutation2 $all > aln_circ2.sam
+			minimap2 -ax map-ont $circular_permutation3 $all > aln_circ3.sam
 			minimap2 -ax map-ont $circular_permutation4 $all > aln_circ4.sam
-			minimap2 -ax map-ont $circular_permutation5 $all  > aln_circ5.sam
+			minimap2 -ax map-ont $circular_permutation5 $all > aln_circ5.sam
 			"""
 		
 		else if( seqplat == 'illumina' )
 			"""
-			minimap2 -asr $params.reference $params.fastq > aln.sam
-			minimap2 -asr $circular_permutation1 $all > aln_circ1.sam
-			minimap2 -asr $circular_permutation2 $all  > aln_circ2.sam
-			minimap2 -asr $circular_permutation3 $all > aln_circ3.sam
-			minimap2 -asr $circular_permutation4 $all  > aln_circ4.sam
-			minimap2 -asr $circular_permutation5 $pall  > aln_circ5.sam
+			minimap2 -ax sr $params.reference $all > aln.sam
+			minimap2 -ax sr $circular_permutation1 $all > aln_circ1.sam
+			minimap2 -ax sr $circular_permutation2 $all > aln_circ2.sam
+			minimap2 -ax sr $circular_permutation3 $all > aln_circ3.sam
+			minimap2 -ax sr $circular_permutation4 $all > aln_circ4.sam
+			minimap2 -ax sr $circular_permutation5 $all > aln_circ5.sam
 			"""
 
 		else 
@@ -313,7 +315,7 @@ process bed {
 	
 	bamToBed -i $aln_f_sorted_circ5 > aln_f_circ5.bed
 	bamToBed -i $aln_r_sorted_circ5 > aln_r_circ5.bed
-		"""
+	"""
 }
 
 process cov {	
@@ -397,6 +399,15 @@ process tau {
 		path aln_r_cov_circ4
 		path aln_f_cov_circ5
 		path aln_r_cov_circ5
+		path fastq
+		path reference
+		val name
+		val seqplat
+		val totalReads
+		val mappedReads
+		val unmappedReads
+		val aveReadLen
+		val maxReadLen
 		
 	output:
 		path 'tau.csv'
@@ -405,12 +416,32 @@ process tau {
 		path 'tau_circ3.csv'
 		path 'tau_circ4.csv'
 		path 'tau_circ5.csv'
+		path 'all_tau.csv'
+		path 'tau_stats.csv'
+		path 'report.docx'
 		
 	script:
 	"""
 	#!/usr/bin/env Rscript
+	
+	library("ggplot2")
+	library("tidyverse")
+	library("dplyr")
+	library("ggrepel")
+	library("ggthemes")
+	library("scales")
+	library("officer")
+	library("mschart")
+	library("zoo")
 
 	len <- $genLen
+
+	break1 <- as.integer(len / 6)
+	break2 <- break1 * 2
+	break3 <- break1 * 3
+	break4 <- break1 * 4
+	break5 <- break1 * 5
+		
 	pos <- seq(from = 1,to = len, by = 1)
 
 	f_bed <- read.table("$aln_f", quote="\\"", comment.char="",
@@ -551,6 +582,20 @@ process tau {
 	
 	tau <- rbind(f_tau, r_tau)
 	tau['tau'] <- tau['SPC'] / tau['cov']
+	
+	for (i in 1:dim(tau)[1]) {
+		tau[i, 'pos_fix'] <- tau[i, 'pos'] 
+	}
+
+	for (i in 1:dim(tau)[1]) {
+		if (tau[i, 'pos_fix'] > len) {
+			tau[i, 'pos_adj'] <- tau[i, 'pos_fix'] - len
+		} else {
+			tau[i, 'pos_adj'] <- tau[i, 'pos_fix']
+		}
+	}
+	
+	tau <- subset(tau, select=-pos_fix)
 	write.csv(tau, "tau.csv")
 	
 	f_spc_circ1 <- data.frame(pos = pos, SPC = 0)
@@ -569,6 +614,20 @@ process tau {
 	
 	tau_circ1 <- rbind(f_tau_circ1, r_tau_circ1)
 	tau_circ1['tau'] <- tau_circ1['SPC'] / tau_circ1['cov']
+	
+	for (i in 1:dim(tau_circ1)[1]) {
+		tau_circ1[i, 'pos_fix'] <- tau_circ1[i, 'pos'] + break1 
+	}
+
+	for (i in 1:dim(tau_circ1)[1]) {
+		if (tau_circ1[i, 'pos_fix'] > len) {
+				tau_circ1[i, 'pos_adj'] <- tau_circ1[i, 'pos_fix'] - len
+		} else {
+			tau_circ1[i, 'pos_adj'] <- tau_circ1[i, 'pos_fix']
+		}
+	}
+	
+	tau_circ1 <- subset(tau_circ1, select=-pos_fix)
 	write.csv(tau_circ1, "tau_circ1.csv")
 	
 	f_spc_circ2 <- data.frame(pos = pos, SPC = 0)
@@ -587,6 +646,20 @@ process tau {
 	
 	tau_circ2 <- rbind(f_tau_circ2, r_tau_circ2)
 	tau_circ2['tau'] <- tau_circ2['SPC'] / tau_circ2['cov']
+
+	for (i in 1:dim(tau_circ2)[1]) {
+		tau_circ2[i, 'pos_fix']<- tau_circ2[i, 'pos'] + break2 
+	}
+
+	for (i in 1:dim(tau_circ2)[1]) {
+		if (tau_circ2[i, 'pos_fix'] > len) {
+			tau_circ2[i, 'pos_adj'] <- tau_circ2[i, 'pos_fix'] - len
+		} else {
+		tau_circ2[i, 'pos_adj'] <- tau_circ2[i, 'pos_fix']
+		}
+	}
+
+	tau_circ2 <- subset(tau_circ2, select=-pos_fix)
 	write.csv(tau_circ2, "tau_circ2.csv")
 
 	f_spc_circ3 <- data.frame(pos = pos, SPC = 0)
@@ -605,6 +678,20 @@ process tau {
 	
 	tau_circ3 <- rbind(f_tau_circ3, r_tau_circ3)
 	tau_circ3['tau'] <- tau_circ3['SPC'] / tau_circ3['cov']
+	
+	for (i in 1:dim(tau_circ3)[1]) {
+		tau_circ3[i, 'pos_fix'] <- tau_circ3[i, 'pos'] + break3 
+	}
+
+	for (i in 1:dim(tau_circ3)[1]) {
+		if (tau_circ3[i, 'pos_fix'] > len) {
+			tau_circ3[i, 'pos_adj'] <- tau_circ3[i, 'pos_fix'] - len
+		} else {
+			tau_circ3[i, 'pos_adj'] <- tau_circ3[i, 'pos_fix']
+		}
+	}
+	
+	tau_circ3 <- subset(tau_circ3, select=-pos_fix)
 	write.csv(tau_circ3, "tau_circ3.csv")
 
 	f_spc_circ4 <- data.frame(pos = pos, SPC = 0)
@@ -623,6 +710,20 @@ process tau {
 	
 	tau_circ4 <- rbind(f_tau_circ4, r_tau_circ4)
 	tau_circ4['tau'] <- tau_circ4['SPC'] / tau_circ4['cov']
+	
+	for (i in 1:dim(tau_circ4)[1]) {
+		tau_circ4[i, 'pos_fix'] <- tau_circ4[i, 'pos'] + break4 
+	}
+
+	for (i in 1:dim(tau_circ4)[1]) {
+		if (tau_circ4[i, 'pos_fix'] > len) {
+			tau_circ4[i, 'pos_adj'] <- tau_circ4[i, 'pos_fix'] - len
+		} else {
+			tau_circ4[i, 'pos_adj'] <- tau_circ4[i, 'pos_fix']
+		}
+	}
+	
+	tau_circ4 <- subset(tau_circ4, select=-pos_fix)
 	write.csv(tau_circ4, "tau_circ4.csv")
 	
 	f_spc_circ5 <- data.frame(pos = pos, SPC = 0)
@@ -641,184 +742,45 @@ process tau {
 	
 	tau_circ5 <- rbind(f_tau_circ5, r_tau_circ5)
 	tau_circ5['tau'] <- tau_circ5['SPC'] / tau_circ5['cov']
+	
+	for (i in 1:dim(tau_circ5)[1]) {
+		tau_circ5[i, 'pos_fix'] <- tau_circ5[i, 'pos'] + break5 
+	}
+
+	for (i in 1:dim(tau_circ5)[1]) {
+		if (tau_circ5[i, 'pos_fix'] > len) {
+			tau_circ5[i, 'pos_adj'] <- tau_circ5[i, 'pos_fix'] - len
+		} else {
+			tau_circ5[i, 'pos_adj'] <- tau_circ5[i, 'pos_fix']
+		}
+	}
+	
+	tau_circ5 <- subset(tau_circ5, select=-pos_fix)
 	write.csv(tau_circ5, "tau_circ5.csv")
 	
-	"""	
-}
-
-process stats {
-	publishDir "${params.out_dir}", mode: 'copy', overwrite: true
-
-	input:
-		path tau
-		path tau_circ1
-		path tau_circ2
-		path tau_circ3
-		path tau_circ4
-		path tau_circ5
+	all_tau <- rbind(tau, tau_circ1, tau_circ2, tau_circ3, tau_circ4, tau_circ5)
 		
-	output:
-		path 'stats.csv'
+	for (i in 1:dim(all_tau)[1]) {
+		if (all_tau[i, 'pos'] == 1 && all_tau[i, 'tau'] == 1){
+			all_tau[i, 'tau'] <- NA
+		} else if (all_tau[i, 'pos'] == len && all_tau[i, 'tau'] == 1){
+			all_tau[i, 'tau'] <- NA
+		}
+	}
 	
-	script:
-	"""
-	#! /usr/bin/env python3
-
-	import heapq
-	import itertools
-	import pandas as pd
-	import numpy as np
-	from sklearn.tree import DecisionTreeRegressor
-	from scipy import stats
-	from statsmodels.sandbox.stats.multicomp import multipletests
-
-	def removePeaks(arr,n):
-		arr=np.array(arr)
-		peak_pos=arr.argsort()[-n:][::-1]
-		arr2=np.delete(arr,peak_pos)
-		return arr2
-
-	def gamma(X):
-		X = np.array(X, dtype=np.int64)
-		v = removePeaks(X, 3)
-
-		dist_max = float(max(v))
-		if dist_max == 0:
-			return np.array([1.00] * len(X))
-
-		actual = np.bincount(v)
-		fit_alpha, fit_loc, fit_beta = stats.gamma.fit(v)
-		expected = stats.gamma.pdf(np.arange(0, dist_max + 1, 1), fit_alpha, loc=fit_loc, scale=fit_beta) * sum(actual)
-
-		return stats.gamma.pdf(X, fit_alpha, loc=fit_loc, scale=fit_beta)
-
-	def peaksDecisionTree(read_depth, starting_pos_depth, tau):
-		L = len(read_depth[0])
-		res = pd.DataFrame({"Position": np.array(range(L)) + 1, "SPC_plus": starting_pos_depth[0],
-                        "tau_plus": tau[0], "tau_minus": tau[1], "SPC_minus": starting_pos_depth[1],
-                        "cov_plus": read_depth[0], "cov_minus": read_depth[1]})
-
-		res["cov"] = res["cov_plus"].values + res["cov_minus"].values
-
-		res["R_plus"] = list(map(float, starting_pos_depth[0])) // np.mean(starting_pos_depth[0])
-		res["R_minus"] = list(map(float, starting_pos_depth[1])) // np.mean(starting_pos_depth[1])
-
-		regr = DecisionTreeRegressor(max_depth=3, min_samples_leaf=100)
-		X = np.arange(L)
-		X = X[:, np.newaxis]
-		y = res["cov"].values
-		regr.fit(X, y)
-
-		y_1 = regr.predict(X)
-		res["covnode"] = y_1
-		covnodes = np.unique(y_1)
-		thres = np.mean(read_depth[0]) / 2
-		covnodes = [n for n in covnodes if n > thres]
-
-		for node in covnodes:
-			X = res[res["covnode"] == node]["SPC_plus"].values
-			res.loc[res["covnode"] == node, "pval_plus"] = gamma(X)
-			X = res[res["covnode"] == node]["SPC_minus"].values
-			res.loc[res["covnode"] == node, "pval_minus"] = gamma(X)
-
-		res.loc[res.pval_plus > 1, 'pval_plus'] = 1.00
-		res.loc[res.pval_minus > 1, 'pval_minus'] = 1.00
-		res = res.fillna(1.00)
-
-		res['pval_plus_adj'] = multipletests(res["pval_plus"].values, alpha=0.01, method="bonferroni")[1]
-		res['pval_minus_adj'] = multipletests(res["pval_minus"].values, alpha=0.01, method="bonferroni")[1]
-
-		res = res.fillna(1.00)
-
-		res_plus = pd.DataFrame(
-			{"Position": res['Position'], "tau": res['tau_plus'], "pval_gamma": res['pval_plus'], "pval_gamma_adj": res['pval_plus_adj']})
-		res_minus = pd.DataFrame(
-			{"Position": res['Position'], "tau": res['tau_minus'], "pval_gamma": res['pval_minus'], "pval_gamma_adj": res['pval_minus_adj']})
-
-		res_plus.sort_values("tau", ascending=False, inplace=True)
-		res_minus.sort_values("tau", ascending=False, inplace=True)
+	write.csv(all_tau, "all_tau.csv")
 	
-		res_plus.reset_index(drop=True, inplace=True)
-		res_minus.reset_index(drop=True, inplace=True)
-
-		return res, res_plus, res_minus
-
-	def selectSignificant(table, pvalue, limit):
-		table_pvalue = table.loc[lambda df: df.pval_gamma_adj < pvalue, :]
-		table_pvalue_limit = table_pvalue.loc[lambda df: df.tau < limit, :]
-		table_pvalue_limit.reset_index(drop=True, inplace=True)
-		return table_pvalue_limit
+	tau_stats <- all_tau %>% 
+		group_by(pos_adj, strand) %>%
+		summarise(
+			avg_tau = mean(tau, na.rm=TRUE),
+			sd = sd(tau, na.rm=TRUE))
+	write.csv(tau_stats, "tau_stats.csv")
 	
-	data = pd.read_csv("$tau")
-
-	f = data[data['strand'] == "f"]
-	r = data[data['strand'] == "r"]
-
-	f_cov = f['cov'].to_numpy()
-	r_cov = r['cov'].to_numpy()
-
-	read_depth = np.array([f_cov, r_cov])
-
-	f_spc = f['SPC'].to_numpy()
-	r_spc = r['SPC'].to_numpy()
-
-	starting_pos_depth = np.array([f_spc, r_spc])
-
-	f_tau = f['tau'].to_numpy()
-	r_tau = r['tau'].to_numpy()
-
-	tau = np.array([f_tau, r_tau])
-	
-	surrounding = 20
-	gen_len = len(f_cov)
-
-	phage_norm, phage_plus_norm, phage_minus_norm = peaksDecisionTree(read_depth, starting_pos_depth, tau)
-	
-	plus_significant = selectSignificant(phage_plus_norm, 1.0 / gen_len, 1.0)
-	minus_significant = selectSignificant(phage_minus_norm, 1.0 / gen_len, 1.0)
-
-	phage_norm.to_csv("stats.csv")
-	"""
-}
-
-process report {
-	publishDir "${params.out_dir}", mode: 'copy', overwrite: true
-	
-	input:
-		path fastq
-		path reference
-		path stats
-		val name
-		val seqplat
-		val totalReads
-		val mappedReads
-		val unmappedReads
-		val aveReadLen
-		val maxReadLen
+	meanDepth <- all_tau %>%
+		filter(chr == "circular_permutation_1") %>%
+		summarise(meanDepth = mean(cov))
 		
-	output:
-		path 'report.docx'
-		
-	script:
-	"""
-	#!/usr/bin/env Rscript
-	
-	library("ggplot2")
-	library("tidyverse")
-	library("dplyr")
-	library("ggrepel")
-	library("ggthemes")
-	library("scales")
-	library("officer")
-	library("mschart")
-	library("zoo")
-
-	data <- read.csv("stats.csv", quote="\\"", comment.char="")
-
-	meanDepth <- summarise(data, meanDepth = mean(cov))
-	
-	print(meanDepth)
-	
 	date <- format(Sys.Date())
 	name <- as.character("$name")
 	totalReads <- as.integer("$totalReads")
@@ -827,28 +789,22 @@ process report {
 	aveReadLen <- as.integer("$aveReadLen")
 	maxReadLen <- as.integer("$maxReadLen")
 	
-	len <- max(data['Position'])
 	window <- 0.01 * len
    
-	max_plus <- max(data['cov_plus'])
-	max_minus <- max(data['cov_minus'])
+	top_tau_plus <- tau_stats %>% 
+		filter(strand == "f") %>%
+		arrange(desc(avg_tau)) %>%
+		head(5)
 
-	top_tau_plus <- data %>%
-		filter(tau_plus < 1) %>%
-		filter(tau_plus > 0.1) %>%
-		arrange(desc(tau_plus)) %>%
-		filter(pval_plus_adj <= 0.5) %>%
-		filter(cov_plus > (0.05 * max_plus)) 
+	top_tau_minus <- tau_stats %>% 
+		filter(strand == "r") %>%
+		arrange(desc(avg_tau)) %>%
+		head(5)
+
+	f_term <- as.integer(top_tau_plus[1,1])
+	r_term <- as.integer(top_tau_minus[1,1])
 	
-	top_tau_minus <- data %>%
-		filter(tau_minus < 1) %>%
-		filter(tau_minus > 0.1) %>%
-		arrange(desc(tau_minus)) %>%
-		filter(pval_minus_adj <= 0.5) %>%
-		filter(cov_minus > (0.05 * max_minus)) 
-
-	f_term <- top_tau_plus[1,2]
-	r_term <- top_tau_minus[1,2]
+	table <- rbind(top_tau_plus, top_tau_minus)	
 	
 	if (is.na(f_term)){
 		plus_term <- "NA"
@@ -862,41 +818,20 @@ process report {
 		minus_term <- r_term
 	}
 
-	within_DTR <- data %>%
-		filter(Position > plus_term) %>%
-		filter(Position < minus_term)
+	within_DTR <- all_tau %>%
+		filter(chr == "circular_permutation_1") %>%
+		filter(pos_adj > plus_term) %>%
+		filter(pos_adj < minus_term)
 
-	outside_DTR <- data %>%
-		filter(Position < plus_term | Position > minus_term)
+	outside_DTR <- all_tau %>%
+		filter(chr == "circular_permutation_1") %>%
+		filter(pos_adj < plus_term | pos_adj > minus_term)
 
 	mean_DTR_depth <-  summarise(within_DTR, mean_DTR_depth = mean(cov))
 	mean_notDTR_depth <- summarise(outside_DTR, mean_notDTR_depth = mean(cov))
 	
 	DTR_depth_ratio <- mean_DTR_depth / mean_notDTR_depth
 
-	if (is.integer(plus_term)){
-		f_term_tau <- top_tau_plus[1,4]
-		f_term_p <- top_tau_plus[1,15]
-	} else {
-		f_term_tau <- "NA"
-		f_term_p <- "NA"
-	}
-
-	if (is.integer(minus_term)){
-		r_term_tau <- top_tau_minus[1,5]
-		r_term_p <- top_tau_minus[1,16]
-	} else {
-		r_term_tau <- "NA"
-		r_term_p <- "NA"
-	}
-
-	Strand <- c("+","-")
-	Terminus <- c(plus_term, minus_term)
-	tau <- c(f_term_tau, r_term_tau)
-	p_value <- c(f_term_p, r_term_p)
-	table <- data.frame(Strand, Terminus, tau, p_value)
-
-	
 	if (is.integer(plus_term) && is.integer(minus_term)) {
 		term_dist <- minus_term - plus_term
 	} else {
@@ -935,11 +870,13 @@ process report {
 		}
 	}
 	
-	depth <- ggplot(data = data, aes(x=Position, y=rollmean(cov, window, na.pad = TRUE, align = "right")))
+	depth <- ggplot(data = subset(all_tau, chr == "circular_permutation_1"), aes(x=pos_adj, y=rollmean(cov, window, na.pad = TRUE, align = "right")))
 		if (is.integer(plus_term)) depth <- depth + geom_vline(xintercept=plus_term, linetype="dashed", colour="springgreen3", linewidth=1.1) 
 		if (is.integer(minus_term)) depth <- depth + geom_vline(xintercept=minus_term, linetype="dashed", colour="violet", linewidth=1.1) 
-	depth <- depth + geom_line(data=data, aes(x=Position, y=rollmean(cov_plus, window, na.pad = TRUE, align = "right"), colour="plus")) +
-		geom_line(data=data, aes(x=Position, y=rollmean(cov_minus, window, na.pad = TRUE, align = "right"), colour="minus")) +
+	depth <- depth + geom_line(data = subset(all_tau, chr == "circular_permutation_1" & strand == "f"),
+			aes(x=pos_adj, y=rollmean(cov, window, na.pad = TRUE, align = "right"), colour="plus")) +
+		geom_line(data = subset(all_tau, chr == "circular_permutation_1" & strand == "r"),
+			aes(x=pos_adj, y=rollmean(cov, window, na.pad = TRUE, align = "right"), colour="minus")) +
 		geom_line() +
 		labs(x = "Reference genome position",
 			y = "Read depth",
@@ -950,15 +887,15 @@ process report {
 		guides(colour = guide_legend(override.aes = list(linewidth = 3))) +
 		theme_calc()
 
-	tau <- ggplot(data=data) +
+	tau <- ggplot(data=tau_stats) +
 		theme_calc() + 
-		geom_point(data=subset(data, tau_plus < 1), aes(x=Position, y=tau_plus, colour="plus")) +
-		geom_point(data=subset(data, tau_minus < 1), aes(x=Position, y=tau_minus, colour="minus")) +
-		geom_label_repel(data=subset(data, Position == plus_term), 
-                   aes(x=Position, y=tau_plus,label=Position), colour="springgreen4",
+		geom_point(data=subset(tau_stats, strand == "f"), aes(x=pos_adj, y=avg_tau, colour="plus")) +
+		geom_point(data=subset(tau_stats, strand == "r"), aes(x=pos_adj, y=avg_tau, colour="minus")) +
+		geom_label_repel(data=subset(tau_stats, pos_adj == plus_term & strand == "f"), 
+                   aes(x=pos_adj, y=avg_tau, label=pos_adj), colour="springgreen4",
                    show.legend = FALSE) + 
-		geom_label_repel(data=subset(data,  Position == minus_term), 
-                   aes(x=Position, y=tau_minus,label=Position), colour="purple",
+		geom_label_repel(data=subset(tau_stats, pos_adj == minus_term & strand == "r"), 
+                   aes(x=pos_adj, y=avg_tau, label=pos_adj), colour="purple",
                    show.legend = FALSE) +
 		labs(x = "Reference genome position",
 			y = "tau",
@@ -1012,23 +949,30 @@ process report {
 		body_add_gg(value = depth, style = "centered", height = 3.25) %>%
 		body_add_par(value = "Figure 2. The total read depth of the sequencing run, graphed as a rolling average with a window size equal to 1% of the reference genome length.  Black is the sum of forward and reverse read depth.")
  
-	print(report, target = "./report.docx")
-	"""
+	print(report, target = "./report.docx")	
+	"""	
 }
 
 process doc2pdf {
 	publishDir "${params.out_dir}", mode: 'copy', overwrite: true
 	
 	input:
+		path tau
+		path tau_circ1
+		path tau_circ2
+		path tau_circ3
+		path tau_circ4
+		path tau_circ5
+		path all_tau
+		path tau_stats
 		path report
-		path out_dir
 		
 	output:
 		path 'report.pdf', optional: true
 	
 	script:
 	"""
-	libreoffice --headless --convert-to pdf  $report --outdir $params.out_dir
+	libreoffice --headless --convert-to pdf $report --outdir $params.out_dir
 	"""	
 }
 
@@ -1043,8 +987,6 @@ workflow {
 	sep_ch = strandSep(aln_ch)
 	bed_ch = bed(sep_ch)
 	cov_ch = cov(sep_ch)
-	tau_ch = tau(len_ch, bed_ch, cov_ch)
-	stats_ch = stats(tau_ch)
-	report_ch = report(stats_ch, ref_ch, refseq_ch, name_ch, plat_ch, alnstats_ch)
-	doc2pdf(report_ch, outdir_ch)
+	tau_ch = tau(len_ch, bed_ch, cov_ch, ref_ch, refseq_ch, name_ch, plat_ch, alnstats_ch)
+	doc2pdf(tau_ch)
 }
