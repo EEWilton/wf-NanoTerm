@@ -1,50 +1,63 @@
 {
-    "$schema": "http://json-schema.org/draft-07/schema",
-    "$id": "https://raw.githubusercontent.com/wf-NanoTerm/master/nextflow_schema.json",
-    "title": "wf-NanoTerm pipeline parameters",
-    "description": "Determine phage termini from nanopore sequencing",
-    "type": "object",
-    "properties": {
+  "$schema": "http://json-schema.org/draft-07/schema",
+  "$id": "https://raw.githubusercontent.com/wf-NanoTerm/master/nextflow_schema.json",
+  "title": "wf-NanoTerm pipeline parameters",
+  "description": "Determine phage termini from nanopore sequencing",
+  "type": "object",
+  "definitions": {
+    "input": {
+      "title": "Input",
+      "type": "object",
+      "description": "",
+      "default": "",
+      "properties": {
+        "fastq": {
+          "type": "string",
+          "default": "None",
+          "description": "Path to the folder that contains the fastq.gz sequence reads",
+          "format": "directory-path"
+        },
+        "reference": {
+          "type": "string",
+          "default": "None",
+          "description": "Path to the reference genome fasta file",
+          "format": "file-path"
+        }
+      },
+      "required": ["fastq", "reference"]
+    },
+    "additional_settings": {
+      "title": "Additional settings",
+      "type": "object",
+      "description": "",
+      "default": "",
+      "properties": {
+        "name": {
+          "type": "string",
+          "default": "None",
+          "description": "Phage name for report"
+        },
         "out_dir": {
-            "type": "string",
-            "default": "output"
+          "type": "string",
+          "default": "output",
+          "description": "Directory for output files"
         },
         "seqplat": {
-            "type": "string",
-            "default": "nanopore"
-        },
-        "name": {
-            "type": "string",
-            "default": "None"
+          "type": "string",
+          "default": "nanopore",
+          "description": "Sequencing platform",
+          "enum": ["nanopore", "illumina"]
         }
+      },
+      "required": ["name", "out_dir", "seqplat"]
+    }
+  },
+  "allOf": [
+    {
+      "$ref": "#/definitions/input"
     },
-    "definitions": {
-        "input": {
-            "title": "Input",
-            "type": "object",
-            "description": "",
-            "default": "",
-            "properties": {
-                "fastq": {
-                    "type": "string",
-                    "default": "None",
-                    "description": "Path to the folder that contains the fastq.gz sequence reads"
-                },
-                "reference": {
-                    "type": "string",
-                    "default": "None",
-                    "description": "Path to the reference genome fasta file"
-                }
-            },
-            "required": [
-                "fastq",
-                "reference"
-            ]
-        }
-    },
-    "allOf": [
-        {
-            "$ref": "#/definitions/input"
-        }
-    ]
+    {
+      "$ref": "#/definitions/additional_settings"
+    }
+  ]
 }
