@@ -135,8 +135,8 @@ process permute {
 process mapping {
 	input:
 		val seqplat
-		path all
 		path refseq
+		path all
 		path circular_permutation1
 		path circular_permutation2
 		path circular_permutation3
@@ -870,23 +870,6 @@ process tau {
 		}
 	}
 	
-	depth <- ggplot(data = subset(all_tau, chr == "circular_permutation_1"), aes(x=pos_adj, y=rollmean(cov, window, na.pad = TRUE, align = "right")))
-		if (is.integer(plus_term)) depth <- depth + geom_vline(xintercept=plus_term, linetype="dashed", colour="springgreen3", linewidth=1.1) 
-		if (is.integer(minus_term)) depth <- depth + geom_vline(xintercept=minus_term, linetype="dashed", colour="violet", linewidth=1.1) 
-	depth <- depth + geom_line(data = subset(all_tau, chr == "circular_permutation_1" & strand == "f"),
-			aes(x=pos_adj, y=rollmean(cov, window, na.pad = TRUE, align = "right"), colour="plus")) +
-		geom_line(data = subset(all_tau, chr == "circular_permutation_1" & strand == "r"),
-			aes(x=pos_adj, y=rollmean(cov, window, na.pad = TRUE, align = "right"), colour="minus")) +
-		geom_line() +
-		labs(x = "Reference genome position",
-			y = "Read depth",
-			colour = "Strand") +
-		scale_color_manual(values = colours) +
-		scale_x_continuous(labels = comma) +
-		scale_y_continuous(limits = c(0, NA)) +
-		guides(colour = guide_legend(override.aes = list(linewidth = 3))) +
-		theme_calc()
-
 	tau <- ggplot(data=tau_stats) +
 		theme_calc() + 
 		geom_point(data=subset(tau_stats, strand == "f"), aes(x=pos_adj, y=avg_tau, colour="plus")) +
@@ -903,6 +886,23 @@ process tau {
 		scale_color_manual(values = colours) +
 		scale_x_continuous(labels = comma) +
 		scale_y_continuous(limits=c(0,1))
+	
+	depth <- ggplot(data = subset(all_tau, chr == "circular_permutation_1"), aes(x=pos_adj, y=rollmean(cov, window, na.pad = TRUE, align = "right")))
+		if (is.integer(plus_term)) depth <- depth + geom_vline(xintercept=plus_term, linetype="dashed", colour="springgreen3", linewidth=1.1) 
+		if (is.integer(minus_term)) depth <- depth + geom_vline(xintercept=minus_term, linetype="dashed", colour="violet", linewidth=1.1) 
+	depth <- depth + geom_line(data = subset(all_tau, chr == "circular_permutation_1" & strand == "f"),
+			aes(x=pos_adj, y=rollmean(cov, window, na.pad = TRUE, align = "right"), colour="plus")) +
+		geom_line(data = subset(all_tau, chr == "circular_permutation_1" & strand == "r"),
+			aes(x=pos_adj, y=rollmean(cov, window, na.pad = TRUE, align = "right"), colour="minus")) +
+		geom_line() +
+		labs(x = "Reference genome position",
+			y = "Read depth",
+			colour = "Strand") +
+		scale_color_manual(values = colours) +
+		scale_x_continuous(labels = comma) +
+		scale_y_continuous(limits = c(0, NA)) +
+		guides(colour = guide_legend(override.aes = list(linewidth = 3))) +
+		theme_calc()
 	
 	report <- read_docx() %>%
 		body_add_par(value = paste("NanoTerm Report: ", name), style = "heading 1") %>%
