@@ -154,7 +154,7 @@ process mapping {
 	script:
 		if( seqplat == 'nanopore' )
 			"""
-			minimap2 -ax map-ont $params.reference $all > aln.sam
+			minimap2 -ax map-ont $refseq $all > aln.sam
 			minimap2 -ax map-ont $circular_permutation1 $all > aln_circ1.sam
 			minimap2 -ax map-ont $circular_permutation2 $all > aln_circ2.sam
 			minimap2 -ax map-ont $circular_permutation3 $all > aln_circ3.sam
