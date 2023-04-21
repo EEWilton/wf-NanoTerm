@@ -135,7 +135,7 @@ process permute {
 process mapping {
 	input:
 		val seqplat
-		path refseq
+		path reference
 		path all
 		path circular_permutation1
 		path circular_permutation2
@@ -154,7 +154,7 @@ process mapping {
 	script:
 		if( seqplat == 'nanopore' )
 			"""
-			minimap2 -ax map-ont $refseq $all > aln.sam
+			minimap2 -ax map-ont $params.reference $all > aln.sam
 			minimap2 -ax map-ont $circular_permutation1 $all > aln_circ1.sam
 			minimap2 -ax map-ont $circular_permutation2 $all > aln_circ2.sam
 			minimap2 -ax map-ont $circular_permutation3 $all > aln_circ3.sam
@@ -982,7 +982,7 @@ workflow {
 	len_ch = refLen(raw_ch)
 	refseq_ch = refSeq(ref_ch)
 	circ_ch = permute(refseq_ch)
-	aln_ch = mapping(plat_ch, refseq_ch, circ_ch, allseq_ch)
+	aln_ch = mapping(plat_ch, refseq_ch, allseq_ch, circ_ch)
 	alnstats_ch = alignStats(aln_ch)
 	sep_ch = strandSep(aln_ch)
 	bed_ch = bed(sep_ch)
