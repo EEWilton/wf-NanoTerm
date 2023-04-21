@@ -982,7 +982,7 @@ workflow {
 	len_ch = refLen(raw_ch)
 	refseq_ch = refSeq(ref_ch)
 	circ_ch = permute(refseq_ch)
-	aln_ch = mapping(plat_ch, allseq_ch, refseq_ch, circ_ch)
+	aln_ch = mapping(plat_ch, refseq_ch, circ_ch, allseq_ch)
 	alnstats_ch = alignStats(aln_ch)
 	sep_ch = strandSep(aln_ch)
 	bed_ch = bed(sep_ch)
