@@ -403,15 +403,6 @@ process tau {
 		path aln_r_cov_circ4
 		path aln_f_cov_circ5
 		path aln_r_cov_circ5
-		path fastq
-		path reference
-		val name
-		val seqplat
-		val totalReads
-		val mappedReads
-		val unmappedReads
-		val aveReadLen
-		val maxReadLen
 		
 	output:
 		path 'tau.csv'
@@ -422,21 +413,14 @@ process tau {
 		path 'tau_circ5.csv'
 		path 'all_tau.csv'
 		path 'tau_stats.csv'
-		path 'report.docx'
+		
 		
 	script:
 	"""
 	#!/usr/bin/env Rscript
 	
-	library("ggplot2")
 	library("tidyverse")
 	library("dplyr")
-	library("ggrepel")
-	library("ggthemes")
-	library("scales")
-	library("officer")
-	library("mschart")
-	library("zoo")
 
 	len <- $genLen
 
@@ -780,7 +764,59 @@ process tau {
 			avg_tau = mean(tau, na.rm=TRUE),
 			sd = sd(tau, na.rm=TRUE))
 	write.csv(tau_stats, "tau_stats.csv")
-	
+	"""	
+}
+
+process report {
+	publishDir "${params.out_dir}", mode: 'copy', overwrite: true
+
+	input:
+		val genLen
+		path tau
+		path tau_circ1
+		path tau_circ2
+		path tau_circ3
+		path tau_circ4
+		path tau_circ5
+		path all_tau
+		path tau_stats
+		val name
+		val seqplat
+		val totalReads
+		val mappedReads
+		val unmappedReads
+		val aveReadLen
+		val maxReadLen
+		path fastq
+		path reference
+		
+	output:
+		path 'report.docx'
+
+	script:
+	"""
+	#!/usr/bin/env Rscript
+
+	library("ggplot2")
+	library("tidyverse")
+	library("dplyr")
+	library("ggrepel")
+	library("ggthemes")
+	library("scales")
+	library("officer")
+	library("mschart")
+	library("zoo")
+	library("stringr")
+	library("seqinr")
+
+	len <- $genLen
+
+	all_tau <- read.csv("$all_tau")
+	all_tau <- subset(all_tau, select=-X)
+
+	tau_stats <- read.csv("$tau_stats")
+	tau_stats <- subset(tau_stats, select=-X)
+
 	meanDepth <- all_tau %>%
 		filter(chr != "circular_permutation_*") %>%
 		summarise(meanDepth = mean(cov))
@@ -964,21 +1000,13 @@ process tau {
 		body_add_par(value = "Figure 2. The total read depth of the sequencing run, graphed as a rolling average with a window size equal to 1% of the reference genome length.  Black is the sum of forward and reverse read depth.")
  
 	print(report, target = "./report.docx")	
-	"""	
+	"""
 }
 
 process doc2pdf {
 	publishDir "${params.out_dir}", mode: 'copy', overwrite: true
 	
 	input:
-		path tau
-		path tau_circ1
-		path tau_circ2
-		path tau_circ3
-		path tau_circ4
-		path tau_circ5
-		path all_tau
-		path tau_stats
 		path report
 		
 	output:
@@ -1001,6 +1029,7 @@ workflow {
 	sep_ch = strandSep(aln_ch)
 	bed_ch = bed(sep_ch)
 	cov_ch = cov(sep_ch)
-	tau_ch = tau(len_ch, bed_ch, cov_ch, ref_ch, refseq_ch, name_ch, plat_ch, alnstats_ch)
-	doc2pdf(tau_ch)
+	tau_ch = tau(len_ch, bed_ch, cov_ch)
+	report_ch = report(len_ch, tau_ch, seq_ch, ref_ch, name_ch, plat_ch, alnstats_ch)
+	doc2pdf(report_ch)
 }
