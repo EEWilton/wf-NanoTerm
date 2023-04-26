@@ -176,6 +176,7 @@ process mapping {
 			 error "Invalid sequencing platform: $params.seqplat"
 }
 
+//This process extracts some statistics from the alignment to the original reference genome
 process alignStats {
 	input:
 		path aln
@@ -204,6 +205,7 @@ process alignStats {
 		"""
 }
 
+//This process seperates the alignment file by strand, to allow for easier analysis.  It also sorts the .bam files
 process strandSep {
 	input:
 		path aln
@@ -267,6 +269,7 @@ process strandSep {
 		"""
 }
 
+//This process makes a bed file from each sorted bam file, to allow the extraction of starting position coverage
 process bed {
 	input:
 		path aln_f_sorted
@@ -318,6 +321,7 @@ process bed {
 	"""
 }
 
+//This process extracts total sequencing depth across the genome
 process cov {	
 	input:
 		path aln_f_sorted
@@ -369,7 +373,7 @@ process cov {
 	"""
 }
 
-
+//This process calculates tau for each position in each circular permutation
 process tau {
 	publishDir "${params.out_dir}", mode: 'copy', overwrite: true
 	
@@ -761,9 +765,9 @@ process tau {
 	all_tau <- rbind(tau, tau_circ1, tau_circ2, tau_circ3, tau_circ4, tau_circ5)
 		
 	for (i in 1:dim(all_tau)[1]) {
-		if (all_tau[i, 'pos'] == 1 && all_tau[i, 'tau'] == 1){
+		if (all_tau[i, 'strand'] == "f" & all_tau[i, 'pos'] == 1 & all_tau[i, 'tau'] == 1){
 			all_tau[i, 'tau'] <- NA
-		} else if (all_tau[i, 'pos'] == len && all_tau[i, 'tau'] == 1){
+		} else if (all_tau[i, 'strand']  == "r" & all_tau[i, 'pos'] == len & all_tau[i, 'tau'] == 1){
 			all_tau[i, 'tau'] <- NA
 		}
 	}
@@ -778,7 +782,7 @@ process tau {
 	write.csv(tau_stats, "tau_stats.csv")
 	
 	meanDepth <- all_tau %>%
-		filter(chr == "circular_permutation_1") %>%
+		filter(chr != "circular_permutation_*") %>%
 		summarise(meanDepth = mean(cov))
 		
 	date <- format(Sys.Date())
@@ -791,84 +795,95 @@ process tau {
 	
 	window <- 0.01 * len
    
-	top_tau_plus <- tau_stats %>% 
+	top_5_plus <- tau_stats %>% 
 		filter(strand == "f") %>%
 		arrange(desc(avg_tau)) %>%
 		head(5)
 
-	top_tau_minus <- tau_stats %>% 
+	top_5_minus <- tau_stats %>% 
 		filter(strand == "r") %>%
 		arrange(desc(avg_tau)) %>%
 		head(5)
 
-	f_term <- as.integer(top_tau_plus[1,1])
-	r_term <- as.integer(top_tau_minus[1,1])
-	
-	table <- rbind(top_tau_plus, top_tau_minus)	
-	
-	if (is.na(f_term)){
-		plus_term <- "NA"
-	} else {
-		plus_term <- f_term
-	}
+	top_sig_plus <- tau_stats %>%
+		filter(strand == "f" & avg_tau >= 0.1) %>%
+		arrange(desc(avg_tau))
 
-	if (is.na(r_term)){
-		minus_term <- "NA"
-	} else {
-		minus_term <- r_term
-	}
+	top_sig_minus <- tau_stats %>%
+		filter(strand == "r" & avg_tau >= 0.1) %>%
+		arrange(desc(avg_tau))
 
-	within_DTR <- all_tau %>%
-		filter(chr == "circular_permutation_1") %>%
+	table <- rbind(top_5_plus, top_5_minus)	
+	colnames(table) <- c('Position', 'Strand', 'Average Tau', 'Standard Deviation')
+	
+	typeCOS <- function(PosPlus, PosMinus, limit) {
+		if (PosPlus < PosMinus & abs(PosPlus-PosMinus) < limit) {
+			return("COS (5')")
+		} else {
+			return("Cos (3')")
+		}
+	}
+	
+	direction <- NA
+	seqCOS <- ""
+	seqDTR <- ""
+	class <- ""
+	Mulike <- FALSE
+
+	if (nrow(top_sig_plus) != 0 & nrow(top_sig_minus) != 0) {
+		if (nrow(top_sig_plus) > 0 | nrow(top_sig_minus) > 0) {
+			if (max(top_sig_plus['avg_tau']) < 0.35 & max(top_sig_minus['avg_tau']) < 0.35) {
+				Redundant = TRUE
+				plus_term = "Multiple"
+				minus_term = "Multiple"
+				Permuted = "Yes"
+				class = "Unknown"
+			} else {
+				plus_term = as.integer(top_sig_plus[1,1])
+				minus_term = as.integer(top_sig_minus[1,1])
+				dist_fr = abs(plus_term - minus_term)
+				dist_fr_len = abs(abs(plus_term - minus_term) - len)
+				dist = min(dist_fr, dist_fr_len)
+			}
+			if (dist <= 2) {
+				Redundant = FALSE
+				Permuted = "No"
+				class = "COS"
+			} else if (dist < 20 & dist > 2) {
+				Redundant = FALSE
+				Permuted = "No"
+				class = typeCOS(plus_term, minus_term, 20)
+			} else if (dist <= 1000) {
+				Redundant = TRUE
+				Permuted = "No"
+				class = "DTR (short)"
+			} else if (dist <= 0.1 * len) {
+				Redundant = TRUE
+				Permuted = "No"
+				class = "DTR (long)"  
+			}
+		} else {}
+	} else if ((nrow(top_sig_plus) == 0 & nrow(top_sig_minus) != 0) | (nrow(top_sig_plus) != 0 & nrow(top_sig_minus) == 0)) {
+		peaks = 1
+ 	} else if (nrow(top_sig_plus) == 0 & nrow(top_sig_minus) == 0) {
+		peaks = 0
+  	}
+	
+	inside_peaks <- all_tau %>%
+		filter(chr != "circular_permutation_*") %>%
 		filter(pos_adj > plus_term) %>%
 		filter(pos_adj < minus_term)
 
-	outside_DTR <- all_tau %>%
-		filter(chr == "circular_permutation_1") %>%
+	outside_peaks <- all_tau %>%
+		filter(chr != "circular_permutation_*") %>%
 		filter(pos_adj < plus_term | pos_adj > minus_term)
 
-	mean_DTR_depth <-  summarise(within_DTR, mean_DTR_depth = mean(cov))
-	mean_notDTR_depth <- summarise(outside_DTR, mean_notDTR_depth = mean(cov))
+	inside_depth <-  summarise(inside_peaks, inside_depth = mean(cov))
+	outside_depth <- summarise(outside_peaks, outside_depth = mean(cov))
 	
-	DTR_depth_ratio <- mean_DTR_depth / mean_notDTR_depth
-
-	if (is.integer(plus_term) && is.integer(minus_term)) {
-		term_dist <- minus_term - plus_term
-	} else {
-		term_dist = "NA"
-	}
-	
+	depth_ratio <- inside_depth / outside_depth
+		
 	colours <- c("plus" = "springgreen4", "minus" = "purple")
-
-	if (is.integer(term_dist) == TRUE){
-		if (term_dist > 20){
-			class <- "DTR"
-		} else if (term_dist < 0){
-			class <- "COS 3′"
-		} else {
-			class <- "COS 5′"
-	}} else {
-		if (is.integer(plus_term) | is.integer(minus_term)) {
-			class <- "Headful"
-		} else {
-			class <- "Headful with no pac site, mu-like, or other"
-	}}
-
-	if (class == "Headful"){
-		if (is.integer(plus_term)){
-			pack_dir <- "Forward"
-		} else if (is.integer(minus_term)){
-			pack_dir <- "Reverse"
-		}
-	}
-	
-	if (class == "Headful"){
-		if (is.integer(plus_term)){
-			concat <- (1 - f_term_tau)/f_term_tau
-		} else if (is.integer(minus_term)){
-			concat <- (1 - r_term_tau)/r_term_tau
-		}
-	}
 	
 	tau <- ggplot(data=tau_stats) +
 		theme_calc() + 
@@ -887,14 +902,13 @@ process tau {
 		scale_x_continuous(labels = comma) +
 		scale_y_continuous(limits=c(0,1))
 	
-	depth <- ggplot(data = subset(all_tau, chr == "circular_permutation_1"), aes(x=pos_adj, y=rollmean(cov, window, na.pad = TRUE, align = "right")))
+	depth <- ggplot(data = subset(all_tau, chr != "circular_permutation_*"), aes(x=pos, y=rollmean(cov, window, na.pad = TRUE, align = "right")))
 		if (is.integer(plus_term)) depth <- depth + geom_vline(xintercept=plus_term, linetype="dashed", colour="springgreen3", linewidth=1.1) 
 		if (is.integer(minus_term)) depth <- depth + geom_vline(xintercept=minus_term, linetype="dashed", colour="violet", linewidth=1.1) 
-	depth <- depth + geom_line(data = subset(all_tau, chr == "circular_permutation_1" & strand == "f"),
-			aes(x=pos_adj, y=rollmean(cov, window, na.pad = TRUE, align = "right"), colour="plus")) +
-		geom_line(data = subset(all_tau, chr == "circular_permutation_1" & strand == "r"),
-			aes(x=pos_adj, y=rollmean(cov, window, na.pad = TRUE, align = "right"), colour="minus")) +
-		geom_line() +
+	depth <- depth + geom_line(data = subset(all_tau, chr != "circular_permutation_*" & strand == "f"),
+			aes(x=pos, y=rollmean(cov, window, na.pad = TRUE, align = "right"), colour="plus")) +
+		geom_line(data = subset(all_tau, chr != "circular_permutation_*" & strand == "r"),
+			aes(x=pos, y=rollmean(cov, window, na.pad = TRUE, align = "right"), colour="minus")) +
 		labs(x = "Reference genome position",
 			y = "Read depth",
 			colour = "Strand") +
@@ -922,26 +936,26 @@ process tau {
 		body_add_par(value = paste("Average read depth: ", as.integer(meanDepth)), style = "Normal") %>%
 		body_add_par("", style = "Normal") %>%
 		body_add_par("Phage prediction", style = "heading 2") %>%
-		body_add_table(table, style = "table_template", first_column = TRUE) %>%
-		body_add_par("", style = "Normal") %>%
 		body_add_par(value = paste("Phage class: ", class), style = "Normal")
 
 	if (class == "COS 5′"){
 		report <- body_add_par(report, value = paste("Cohesive sequence: ", class), style = "Normal")
 	} else if (class == "COS 3′"){
 		report <- body_add_par(report, value = paste("Cohesive sequence: ", class), style = "Normal")
-	} else if (class == "DTR"){
-		report <- body_add_par(report, value = paste("DTR length: ", term_dist), style = "Normal")
-		report <- body_add_par(report, value = paste("Average read depth within DTR: ", mean_DTR_depth), style = "Normal")
-		report <- body_add_par(report, value = paste("DTR read depth / non-DTR read depth: ", DTR_depth_ratio), style = "Normal")
+	} else if (class == "DTR (short)" | class == "DTR (long)"){
+		report <- body_add_par(report, value = paste("DTR length: ", dist), style = "Normal")
+		report <- body_add_par(report, value = paste("Average read depth within DTR: ", inside_depth), style = "Normal")
+		report <- body_add_par(report, value = paste("DTR read depth / non-DTR read depth: ", depth_ratio), style = "Normal")
 		report <- body_add_par(report, value = "If there is more the 2x the read depth within the predicted DTR, this is consistent with DTR packaging", style = "Normal")
 	} else if (class == "headful"){
 		report <- body_add_par(report, value = paste("Packaging direction: ", pack_dir), style = "Normal")
 		report <- body_add_par(report, value = paste("Number of genome copies per concatamer: ", concat), style = "Normal")
 	} else {
 	}
-
-	report <- body_add_par(report, "Figures", style = "heading 2") %>%
+	report <- body_add_par(report, "Top significant tau values", style = "heading 2") %>%
+		body_add_table(table, style = "table_template", first_column = TRUE) %>%
+		body_add_par("", style = "Normal") %>%
+		body_add_par(report, "Figures", style = "heading 2") %>%
 		body_add_par("", style = "Normal") %>%
 		body_add_gg(value = tau, style = "centered", height = 3.25) %>%
 		body_add_par(value = "Figure 1. The tau value calculated for each genome position.") %>%
