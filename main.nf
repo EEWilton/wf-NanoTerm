@@ -58,7 +58,7 @@ process refSeq {
 		
 	script:
 	"""
-	grep ">" $reference > refseq.fasta
+	echo ">input_reference" > refseq.fasta
 	grep -v ">" $reference | tr -d "\\n" >> refseq.fasta
 	"""
 }
@@ -135,7 +135,7 @@ process permute {
 process mapping {
 	input:
 		val seqplat
-		path reference
+		path refseq
 		path all
 		path circular_permutation1
 		path circular_permutation2
@@ -154,7 +154,7 @@ process mapping {
 	script:
 		if( seqplat == 'nanopore' )
 			"""
-			minimap2 -ax map-ont $params.reference $all > aln.sam
+			minimap2 -ax map-ont $refseq $all > aln.sam
 			minimap2 -ax map-ont $circular_permutation1 $all > aln_circ1.sam
 			minimap2 -ax map-ont $circular_permutation2 $all > aln_circ2.sam
 			minimap2 -ax map-ont $circular_permutation3 $all > aln_circ3.sam
@@ -176,7 +176,7 @@ process mapping {
 			 error "Invalid sequencing platform: $params.seqplat"
 }
 
-//This process extracts some statistics from the alignment to the original reference genome
+// This process extracts some statistics from the alignment to the original reference genome
 process alignStats {
 	input:
 		path aln
@@ -205,7 +205,7 @@ process alignStats {
 		"""
 }
 
-//This process seperates the alignment file by strand, to allow for easier analysis.  It also sorts the .bam files
+// This process seperates the alignment file by strand, to allow for easier analysis.  It also sorts the .bam files
 process strandSep {
 	input:
 		path aln
@@ -269,7 +269,7 @@ process strandSep {
 		"""
 }
 
-//This process makes a bed file from each sorted bam file, to allow the extraction of starting position coverage
+// This process makes a bed file from each sorted bam file, to allow the extraction of starting position coverage
 process bed {
 	input:
 		path aln_f_sorted
@@ -321,7 +321,7 @@ process bed {
 	"""
 }
 
-//This process extracts total sequencing depth across the genome
+// This process extracts total sequencing depth across the genome
 process cov {	
 	input:
 		path aln_f_sorted
@@ -373,7 +373,7 @@ process cov {
 	"""
 }
 
-//This process calculates tau for each position in each circular permutation
+// This process calculates tau for each position in each circular permutation
 process tau {
 	publishDir "${params.out_dir}", mode: 'copy', overwrite: true
 	
@@ -767,7 +767,7 @@ process tau {
 	"""	
 }
 
-process report {
+process classify {
 	publishDir "${params.out_dir}", mode: 'copy', overwrite: true
 
 	input:
@@ -781,7 +781,6 @@ process report {
 		path all_tau
 		path tau_stats
 		val name
-		val seqplat
 		val totalReads
 		val mappedReads
 		val unmappedReads
@@ -789,6 +788,185 @@ process report {
 		val maxReadLen
 		path fastq
 		path reference
+		val seqplat
+
+	output:
+		path 'classification.csv'
+		
+	script:
+	"""
+	#!/usr/bin/env Rscript
+
+	library("tidyverse")
+	library("dplyr")
+
+	len <- $genLen
+
+	tau_stats <- read.csv("$tau_stats")
+	tau_stats <- subset(tau_stats, select=-X)
+
+	top_sig_plus <- tau_stats %>%
+  	filter(strand == "f" & avg_tau >= 0.1) %>%
+  		arrange(desc(avg_tau))
+
+	top_sig_minus <- tau_stats %>%
+  		filter(strand == "r" & avg_tau >= 0.1) %>%
+  		arrange(desc(avg_tau))
+
+	num_sig_plus <- nrow(top_sig_plus)
+	num_sig_minus <- nrow(top_sig_minus)
+
+	if (num_sig_plus == 0){
+  		plus_term = NA
+  		plus_term_tau = NA
+	} else {
+  		plus_term <- as.integer(top_sig_plus[1,1])
+  		plus_term_tau <- top_sig_plus[1,3]
+	}
+
+	if (num_sig_minus == 0){
+ 		 minus_term = NA
+ 	 	minus_term_tau = NA
+	} else {
+ 		minus_term <- as.integer(top_sig_minus[1,1])
+  		minus_term_tau <- top_sig_minus[1,3]
+	}
+
+	if (num_sig_plus > 1 | num_sig_minus > 1) {
+ 		 peaks = "multiple"
+	} else if (num_sig_plus == 1 & num_sig_minus == 1) {
+  		peaks = "two"
+	} else if ((num_sig_plus == 0 | num_sig_minus == 0) & (num_sig_plus == 1 | num_sig_minus == 1)) {
+  		peaks = "one"
+	} else if (num_sig_plus == 0 & num_sig_minus == 0) {
+ 		 peaks = "none"
+	} else {
+  		peaks = NA
+	}
+
+	if (peaks == "multiple"){
+  		if (plus_term_tau < 0.35 & minus_term_tau < 0.35) {
+    		peaks = "multiple"
+  		} else {
+    		peaks = "two"
+  		}
+	}
+
+	if (peaks == "two") {
+  		if (plus_term == 1 | minus_term == len){
+  			preclass = "terminal"
+  		} else if (plus_term > 1 & minus_term < len) {
+  			preclass = "internal"
+  		}
+	}
+
+	if (peaks == "two" & preclass == "internal") {
+  		term_dist <- abs(minus_term - plus_term)
+  		print(term_dist)
+  		if (term_dist <= 20) {
+    		class = "COS"
+    		print(class)
+    	if (plus_term < minus_term) {
+      		subclass = "5 prime"
+   		 } else {
+     		subclass = "3 prime"
+    	}
+  		 print(subclass) 
+  	} else {
+    	class = "DTR"
+   		print(class)
+   		if (term_dist < 1000) {
+      		subclass = "short"
+    	} else {
+     		 subclass = "long"
+    	}
+    	print(subclass)  
+    	}
+	}
+
+	if (peaks == "one") {
+  		if (is.na(plus_term)){
+    		if (minus_term == len | minus_term == 1) {
+     			preclass = "terminal"
+    		} else {
+      			preclass = "internal"
+    		}
+  		} else if (is.na(minus_term)) {
+    		if (plus_term == 1 | plus_term == len) {
+      			preclass = "terminal"
+    		} else {
+      		preclass = "internal"
+    		}
+ 		}
+	}
+
+
+	if (peaks == "none"){
+
+	}
+
+	if (peaks == "multiple") {
+
+	}
+
+	category <- c("len", "num_sig_plus", "num_sig_minus", "peaks",
+                  "plus_term", "plus_term_tau",
+                  "minus_term", "minus_term_tau",
+                  "preclass", "subclass", "term_dist")
+    value <- c(len, num_sig_plus, num_sig_minus, peaks, 
+                plus_term, plus_term_tau,
+                minus_term, minus_term_tau,
+                preclass, subclass, term_dist)
+
+	# Convert nested list to the dataframe by columns
+	df <- data.frame(category, value)
+	df
+
+	write.csv(df, "classification.csv")
+
+	"""
+}
+
+process terminalReads {
+	publishDir "${params.out_dir}", mode: 'copy', overwrite: true
+	
+	input:
+		path aln
+		path aln_circ1
+		path aln_circ2
+		path aln_circ3
+		path aln_circ4
+		path aln_circ5
+		path classification
+		
+	output:
+		path 'term_aln.bam'
+
+	shell:
+	'''
+	samtools view -b !{aln} > aln.bam
+	
+	samtools sort aln.bam > aln_sorted.bam
+	samtools index aln_sorted.bam
+	
+	plus_term="$(cat !{classification} | tr -d '"' | awk -F "," '$2 == "plus_term" {print $3}')"
+	minus_term="$(cat !{classification} | tr -d '"' | awk -F "," '$2 == "minus_term" {print $3}')"
+
+	echo $plus_term
+	echo $minus_term
+
+	region="$(echo "input_reference:${plus_term}-${minus_term}")"
+
+	echo $region
+
+	samtools view -b aln_sorted.bam $region > term_aln.bam
+	'''
+}
+
+process report {
+	publishDir "${params.out_dir}", mode: 'copy', overwrite: true
+
+	input:
 		
 	output:
 		path 'report.docx'
@@ -808,200 +986,9 @@ process report {
 	library("zoo")
 	library("stringr")
 	library("seqinr")
-
-	len <- $genLen
-
-	all_tau <- read.csv("$all_tau")
-	all_tau <- subset(all_tau, select=-X)
-
-	tau_stats <- read.csv("$tau_stats")
-	tau_stats <- subset(tau_stats, select=-X)
-
-	meanDepth <- all_tau %>%
-		filter(chr != "circular_permutation_*") %>%
-		summarise(meanDepth = mean(cov))
-		
-	date <- format(Sys.Date())
-	name <- as.character("$name")
-	totalReads <- as.integer("$totalReads")
-	mappedReads <- as.integer("$mappedReads")
-	unmappedReads <- as.integer("$unmappedReads")
-	aveReadLen <- as.integer("$aveReadLen")
-	maxReadLen <- as.integer("$maxReadLen")
-	
-	window <- 0.01 * len
-   
-	top_5_plus <- tau_stats %>% 
-		filter(strand == "f") %>%
-		arrange(desc(avg_tau)) %>%
-		head(5)
-
-	top_5_minus <- tau_stats %>% 
-		filter(strand == "r") %>%
-		arrange(desc(avg_tau)) %>%
-		head(5)
-
-	top_sig_plus <- tau_stats %>%
-		filter(strand == "f" & avg_tau >= 0.1) %>%
-		arrange(desc(avg_tau))
-
-	top_sig_minus <- tau_stats %>%
-		filter(strand == "r" & avg_tau >= 0.1) %>%
-		arrange(desc(avg_tau))
-
-	table <- rbind(top_5_plus, top_5_minus)	
-	colnames(table) <- c('Position', 'Strand', 'Average Tau', 'Standard Deviation')
-	
-	typeCOS <- function(PosPlus, PosMinus, limit) {
-		if (PosPlus < PosMinus & abs(PosPlus-PosMinus) < limit) {
-			return("COS (5')")
-		} else {
-			return("Cos (3')")
-		}
-	}
-	
-	direction <- NA
-	seqCOS <- ""
-	seqDTR <- ""
-	class <- ""
-	Mulike <- FALSE
-
-	if (nrow(top_sig_plus) != 0 & nrow(top_sig_minus) != 0) {
-		if (nrow(top_sig_plus) > 0 | nrow(top_sig_minus) > 0) {
-			if (max(top_sig_plus['avg_tau']) < 0.35 & max(top_sig_minus['avg_tau']) < 0.35) {
-				Redundant = TRUE
-				plus_term = "Multiple"
-				minus_term = "Multiple"
-				Permuted = "Yes"
-				class = "Unknown"
-			} else {
-				plus_term = as.integer(top_sig_plus[1,1])
-				minus_term = as.integer(top_sig_minus[1,1])
-				dist_fr = abs(plus_term - minus_term)
-				dist_fr_len = abs(abs(plus_term - minus_term) - len)
-				dist = min(dist_fr, dist_fr_len)
-			}
-			if (dist <= 2) {
-				Redundant = FALSE
-				Permuted = "No"
-				class = "COS"
-			} else if (dist < 20 & dist > 2) {
-				Redundant = FALSE
-				Permuted = "No"
-				class = typeCOS(plus_term, minus_term, 20)
-			} else if (dist <= 1000) {
-				Redundant = TRUE
-				Permuted = "No"
-				class = "DTR (short)"
-			} else if (dist <= 0.1 * len) {
-				Redundant = TRUE
-				Permuted = "No"
-				class = "DTR (long)"  
-			}
-		} else {}
-	} else if ((nrow(top_sig_plus) == 0 & nrow(top_sig_minus) != 0) | (nrow(top_sig_plus) != 0 & nrow(top_sig_minus) == 0)) {
-		peaks = 1
- 	} else if (nrow(top_sig_plus) == 0 & nrow(top_sig_minus) == 0) {
-		peaks = 0
-  	}
-	
-	inside_peaks <- all_tau %>%
-		filter(chr != "circular_permutation_*") %>%
-		filter(pos_adj > plus_term) %>%
-		filter(pos_adj < minus_term)
-
-	outside_peaks <- all_tau %>%
-		filter(chr != "circular_permutation_*") %>%
-		filter(pos_adj < plus_term | pos_adj > minus_term)
-
-	inside_depth <-  summarise(inside_peaks, inside_depth = mean(cov))
-	outside_depth <- summarise(outside_peaks, outside_depth = mean(cov))
-	
-	depth_ratio <- inside_depth / outside_depth
-		
-	colours <- c("plus" = "springgreen4", "minus" = "purple")
-	
-	tau <- ggplot(data=tau_stats) +
-		theme_calc() + 
-		geom_point(data=subset(tau_stats, strand == "f"), aes(x=pos_adj, y=avg_tau, colour="plus")) +
-		geom_point(data=subset(tau_stats, strand == "r"), aes(x=pos_adj, y=avg_tau, colour="minus")) +
-		geom_label_repel(data=subset(tau_stats, pos_adj == plus_term & strand == "f"), 
-                   aes(x=pos_adj, y=avg_tau, label=pos_adj), colour="springgreen4",
-                   show.legend = FALSE) + 
-		geom_label_repel(data=subset(tau_stats, pos_adj == minus_term & strand == "r"), 
-                   aes(x=pos_adj, y=avg_tau, label=pos_adj), colour="purple",
-                   show.legend = FALSE) +
-		labs(x = "Reference genome position",
-			y = "tau",
-			colour = "Strand") +
-		scale_color_manual(values = colours) +
-		scale_x_continuous(labels = comma) +
-		scale_y_continuous(limits=c(0,1))
-	
-	depth <- ggplot(data = subset(all_tau, chr != "circular_permutation_*"), aes(x=pos, y=rollmean(cov, window, na.pad = TRUE, align = "right")))
-		if (is.integer(plus_term)) depth <- depth + geom_vline(xintercept=plus_term, linetype="dashed", colour="springgreen3", linewidth=1.1) 
-		if (is.integer(minus_term)) depth <- depth + geom_vline(xintercept=minus_term, linetype="dashed", colour="violet", linewidth=1.1) 
-	depth <- depth + geom_line(data = subset(all_tau, chr != "circular_permutation_*" & strand == "f"),
-			aes(x=pos, y=rollmean(cov, window, na.pad = TRUE, align = "right"), colour="plus")) +
-		geom_line(data = subset(all_tau, chr != "circular_permutation_*" & strand == "r"),
-			aes(x=pos, y=rollmean(cov, window, na.pad = TRUE, align = "right"), colour="minus")) +
-		labs(x = "Reference genome position",
-			y = "Read depth",
-			colour = "Strand") +
-		scale_color_manual(values = colours) +
-		scale_x_continuous(labels = comma) +
-		scale_y_continuous(limits = c(0, NA)) +
-		guides(colour = guide_legend(override.aes = list(linewidth = 3))) +
-		theme_calc()
-	
-	report <- read_docx() %>%
-		body_add_par(value = paste("NanoTerm Report: ", name), style = "heading 1") %>%
-		body_add_par("", style = "Normal") %>%
-		body_add_par("Run details", style = "heading 2") %>%
-		body_add_par(value = paste("Generated on: ", date), style = "Normal") %>%
-		body_add_par(value = paste("Input sequences: ", "$params.fastq"), style = "Normal") %>%
-		body_add_par(value = paste("Reference genome: ", "$params.reference"), style = "Normal") %>%
-		body_add_par(value = paste("Reference genome length: ", len), style = "Normal") %>%
-		body_add_par("Alignment details", style = "heading 2") %>%
-		body_add_par(value = paste("Sequencing platform:", "$params.seqplat"), style = "Normal") %>%
-		body_add_par(value = paste("Number of sequence reads: ", totalReads), style = "Normal") %>%
-		body_add_par(value = paste("Number of reads aligned: ", mappedReads), style = "Normal") %>%
-		body_add_par(value = paste("Number of reads not aligned: ", unmappedReads), style = "Normal") %>%
-		body_add_par(value = paste("Average read length: ", aveReadLen), style = "Normal") %>%
-		body_add_par(value = paste("Maximum read length: ", maxReadLen), style = "Normal") %>%
-		body_add_par(value = paste("Average read depth: ", as.integer(meanDepth)), style = "Normal") %>%
-		body_add_par("", style = "Normal") %>%
-		body_add_par("Phage prediction", style = "heading 2") %>%
-		body_add_par(value = paste("Phage class: ", class), style = "Normal")
-
-	if (class == "COS 5′"){
-		report <- body_add_par(report, value = paste("Cohesive sequence: ", class), style = "Normal")
-	} else if (class == "COS 3′"){
-		report <- body_add_par(report, value = paste("Cohesive sequence: ", class), style = "Normal")
-	} else if (class == "DTR (short)" | class == "DTR (long)"){
-		report <- body_add_par(report, value = paste("DTR length: ", dist), style = "Normal")
-		report <- body_add_par(report, value = paste("Average read depth within DTR: ", inside_depth), style = "Normal")
-		report <- body_add_par(report, value = paste("DTR read depth / non-DTR read depth: ", depth_ratio), style = "Normal")
-		report <- body_add_par(report, value = "If there is more the 2x the read depth within the predicted DTR, this is consistent with DTR packaging", style = "Normal")
-	} else if (class == "headful"){
-		report <- body_add_par(report, value = paste("Packaging direction: ", pack_dir), style = "Normal")
-		report <- body_add_par(report, value = paste("Number of genome copies per concatamer: ", concat), style = "Normal")
-	} else {
-	}
-	report <- body_add_par(report, "Top significant tau values", style = "heading 2") %>%
-		body_add_table(table, style = "table_template", first_column = TRUE) %>%
-		body_add_par("", style = "Normal") %>%
-		body_add_par(report, "Figures", style = "heading 2") %>%
-		body_add_par("", style = "Normal") %>%
-		body_add_gg(value = tau, style = "centered", height = 3.25) %>%
-		body_add_par(value = "Figure 1. The tau value calculated for each genome position.") %>%
-		body_add_par("", style = "Normal") %>%
-		body_add_gg(value = depth, style = "centered", height = 3.25) %>%
-		body_add_par(value = "Figure 2. The total read depth of the sequencing run, graphed as a rolling average with a window size equal to 1% of the reference genome length.  Black is the sum of forward and reverse read depth.")
- 
-	print(report, target = "./report.docx")	
 	"""
 }
+	
 
 process doc2pdf {
 	publishDir "${params.out_dir}", mode: 'copy', overwrite: true
@@ -1030,6 +1017,7 @@ workflow {
 	bed_ch = bed(sep_ch)
 	cov_ch = cov(sep_ch)
 	tau_ch = tau(len_ch, bed_ch, cov_ch)
-	report_ch = report(len_ch, tau_ch, seq_ch, ref_ch, name_ch, plat_ch, alnstats_ch)
-	doc2pdf(report_ch)
+	class_ch = classify(len_ch, tau_ch, name_ch, alnstats_ch, seq_ch, ref_ch, plat_ch)
+	termreads_ch = terminalReads(aln_ch, class_ch)
+	
 }
