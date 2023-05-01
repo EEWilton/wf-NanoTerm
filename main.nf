@@ -35,6 +35,7 @@ process rawSeq {
 	"""
 }
 
+// This process returns the length of the reference genome
 process refLen {
 	input:
 		path rawseq
@@ -767,6 +768,7 @@ process tau {
 	"""	
 }
 
+// This process classifies the phage based on the termini, distance, etc
 process classify {
 	publishDir "${params.out_dir}", mode: 'copy', overwrite: true
 
@@ -912,11 +914,11 @@ process classify {
 	category <- c("len", "num_sig_plus", "num_sig_minus", "peaks",
                   "plus_term", "plus_term_tau",
                   "minus_term", "minus_term_tau",
-                  "preclass", "subclass", "term_dist")
+                  "preclass", "subclass", "class", "term_dist")
     value <- c(len, num_sig_plus, num_sig_minus, peaks, 
                 plus_term, plus_term_tau,
                 minus_term, minus_term_tau,
-                preclass, subclass, term_dist)
+                preclass, subclass, class, term_dist)
 
 	# Convert nested list to the dataframe by columns
 	df <- data.frame(category, value)
@@ -927,6 +929,7 @@ process classify {
 	"""
 }
 
+// This process outputs the reads that align with the terminal region
 process terminalReads {
 	publishDir "${params.out_dir}", mode: 'copy', overwrite: true
 	
@@ -952,14 +955,9 @@ process terminalReads {
 	plus_term="$(cat !{classification} | tr -d '"' | awk -F "," '$2 == "plus_term" {print $3}')"
 	minus_term="$(cat !{classification} | tr -d '"' | awk -F "," '$2 == "minus_term" {print $3}')"
 
-	echo $plus_term
-	echo $minus_term
+	region="$(echo input_reference:$plus_term-$minus_term)"
 
-	region="$(echo "input_reference:${plus_term}-${minus_term}")"
-
-	echo $region
-
-	samtools view -b aln_sorted.bam $region > term_aln.bam
+	samtools view -b aln_sorted.bam \"$region\" > term_aln.bam
 	'''
 }
 
@@ -967,7 +965,26 @@ process report {
 	publishDir "${params.out_dir}", mode: 'copy', overwrite: true
 
 	input:
-		
+		path fastq
+		path reference
+		val name
+		val seqplat
+		val totalReads
+		val mappedReads
+		val unmappedReads
+		val aveReadLen
+		val maxReadLen
+		path classification
+		path tau
+		path tau_circ1
+		path tau_circ2
+		path tau_circ3
+		path tau_circ4
+		path tau_circ5
+		path all_tau
+		path tau_stats
+
+
 	output:
 		path 'report.docx'
 
@@ -986,6 +1003,79 @@ process report {
 	library("zoo")
 	library("stringr")
 	library("seqinr")
+
+	date <- format(Sys.Date())
+	name <- as.character("$name")
+	totalReads <- as.integer("$totalReads")
+	mappedReads <- as.integer("$mappedReads")
+	unmappedReads <- as.integer("$unmappedReads")
+	aveReadLen <- as.integer("$aveReadLen")
+	maxReadLen <- as.integer("$maxReadLen")
+
+	tau_stats <- read.csv("$tau_stats")
+	tau_stats <- subset(tau_stats, select=-X)
+
+	classification <- read.csv("$classification")
+	classification <- subset(classification, select=-X)
+
+	len <- classification[1,2]
+	num_sig_plus <- classification[2,2]
+	num_sig_minus <- classification[3,2]
+	peaks <- classification[4,2]
+	plus_term <- classification[5,2]
+	plus_term_tau <- classification[6,2]
+	minus_term <- classification[7,2]
+	minus_term_tau <- classification[8,2]
+	preclass <- classification[9,2]
+	subclass <- classification[10,2]
+	class <- classification[11,2]
+	term_dist <- classification[12,2]
+
+	top_5_plus <- tau_stats %>% 
+  		filter(strand == "f") %>%
+ 		arrange(desc(avg_tau)) %>%
+  		head(5)
+
+	top_5_minus <- tau_stats %>% 
+  		filter(strand == "r") %>%
+  		arrange(desc(avg_tau)) %>%
+  		head(5)
+
+	table <- rbind(top_5_plus, top_5_minus)
+
+	colnames(table) <- c('Position','Strand','Average Tau', 'Standard Deviation')
+
+	report <- read_docx() %>%
+		body_add_par(value = paste("NanoTerm Report: ", name), style = "heading 1") %>%
+		body_add_par("", style = "Normal") %>%
+		body_add_par("Run details", style = "heading 2") %>%
+		body_add_par(value = paste("Generated on: ", date), style = "Normal") %>%
+		body_add_par(value = paste("Input sequences: ", "$params.fastq"), style = "Normal") %>%
+		body_add_par(value = paste("Reference genome: ", "$params.reference"), style = "Normal") %>%
+		body_add_par(value = paste("Reference genome length: ", len), style = "Normal") %>%
+		body_add_par("Alignment details", style = "heading 2") %>%
+		body_add_par(value = paste("Sequencing platform:", "$params.seqplat"), style = "Normal") %>%
+		body_add_par(value = paste("Number of sequence reads: ", totalReads), style = "Normal") %>%
+		body_add_par(value = paste("Number of reads aligned: ", mappedReads), style = "Normal") %>%
+		body_add_par(value = paste("Number of reads not aligned: ", unmappedReads), style = "Normal") %>%
+		body_add_par(value = paste("Average read length: ", aveReadLen), style = "Normal") %>%
+		body_add_par(value = paste("Maximum read length: ", maxReadLen), style = "Normal") %>%
+		body_add_par("", style = "Normal") %>%
+		body_add_par("Phage prediction", style = "heading 2") %>%
+		body_add_par(value = paste("Class: ", class), style = "Normal") %>%
+		body_add_table(table, style = "table_template", first_column = TRUE) %>%
+		body_add_par("", style = "Normal")
+		
+	report <- body_add_par(report, "Figures", style = "heading 2") %>%
+		body_add_par("", style = "Normal") %>%
+
+		body_add_par(value = "Figure 1. The tau value calculated for each genome position.") %>%
+		body_add_par("", style = "Normal") %>%
+
+		body_add_par(value = "Figure 2. The total read depth of the sequencing run, graphed as a rolling average with a window size equal to 1% of the reference genome length.  Black is the sum of forward and reverse read depth.")
+ 
+	print(report, target = "./report.docx")
+
 	"""
 }
 	
@@ -1011,7 +1101,7 @@ workflow {
 	len_ch = refLen(raw_ch)
 	refseq_ch = refSeq(ref_ch)
 	circ_ch = permute(refseq_ch)
-	aln_ch = mapping(plat_ch, ref_ch, allseq_ch, circ_ch)
+	aln_ch = mapping(plat_ch, refseq_ch, allseq_ch, circ_ch)
 	alnstats_ch = alignStats(aln_ch)
 	sep_ch = strandSep(aln_ch)
 	bed_ch = bed(sep_ch)
@@ -1019,5 +1109,6 @@ workflow {
 	tau_ch = tau(len_ch, bed_ch, cov_ch)
 	class_ch = classify(len_ch, tau_ch, name_ch, alnstats_ch, seq_ch, ref_ch, plat_ch)
 	termreads_ch = terminalReads(aln_ch, class_ch)
-	
+	report_ch = report(seq_ch, ref_ch, name_ch, plat_ch, alnstats_ch, class_ch, tau_ch)
+	doc2pdf(report_ch)
 }
