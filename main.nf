@@ -855,9 +855,12 @@ process classify {
 	}
 
 	if (peaks == "two") {
-  		if (plus_term == 1 | minus_term == len){
+  		if (plus_term <= 5 | minus_term >= (len - 5) | minus_term <= 5 | plus_term >= (len - 5)){
   			preclass = "terminal"
-  		} else if (plus_term > 1 & minus_term < len) {
+			subclass = "NA"
+			term_dist = "NA"
+			class = "NA"
+  		} else if (plus_term > 5 & minus_term < (len - 5)) {
   			preclass = "internal"
   		}
 	}
@@ -888,14 +891,16 @@ process classify {
 
 	if (peaks == "one") {
   		if (is.na(plus_term)){
-    		if (minus_term == len | minus_term == 1) {
+    		if (plus_term <= 5 | minus_term >= (len - 5) | minus_term <= 5 | plus_term >= (len - 5)) {
      			preclass = "terminal"
+				subclass = "NA"
     		} else {
       			preclass = "internal"
     		}
   		} else if (is.na(minus_term)) {
-    		if (plus_term == 1 | plus_term == len) {
+    		if (plus_term <= 5 | minus_term >= (len - 5) | minus_term <= 5 | plus_term >= (len - 5)) {
       			preclass = "terminal"
+				subclass = "NA"
     		} else {
       		preclass = "internal"
     		}
@@ -919,6 +924,8 @@ process classify {
                 plus_term, plus_term_tau,
                 minus_term, minus_term_tau,
                 preclass, subclass, class, term_dist)
+
+	print(value)
 
 	# Convert nested list to the dataframe by columns
 	df <- data.frame(category, value)
