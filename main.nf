@@ -856,53 +856,29 @@ process classify {
 
 	if (peaks == "two") {
   		if (plus_term <= 5 | minus_term >= (len - 5) | minus_term <= 5 | plus_term >= (len - 5)){
-  			preclass = "terminal"
+  			location = "terminal"
 			subclass = "NA"
-			term_dist = "NA"
+			term_dist <- "NA"
 			class = "NA"
   		} else if (plus_term > 5 & minus_term < (len - 5)) {
-  			preclass = "internal"
+  			location = "internal"
   		}
 	}
 
-	if (peaks == "two" & preclass == "internal") {
-  		term_dist <- abs(minus_term - plus_term)
-  		print(term_dist)
-  		if (term_dist <= 20) {
-    		class = "COS"
-    		print(class)
-    	if (plus_term < minus_term) {
-      		subclass = "5 prime"
-   		 } else {
-     		subclass = "3 prime"
-    	}
-  		 print(subclass) 
-  	} else {
-    	class = "DTR"
-   		print(class)
-   		if (term_dist < 1000) {
-      		subclass = "short"
-    	} else {
-     		 subclass = "long"
-    	}
-    	print(subclass)  
-    	}
-	}
-
-	if (peaks == "one") {
+		if (peaks == "one") {
   		if (is.na(plus_term)){
     		if (plus_term <= 5 | minus_term >= (len - 5) | minus_term <= 5 | plus_term >= (len - 5)) {
-     			preclass = "terminal"
+     			location = "terminal"
 				subclass = "NA"
     		} else {
-      			preclass = "internal"
+      			location = "internal"
     		}
   		} else if (is.na(minus_term)) {
     		if (plus_term <= 5 | minus_term >= (len - 5) | minus_term <= 5 | plus_term >= (len - 5)) {
-      			preclass = "terminal"
+      			location = "terminal"
 				subclass = "NA"
     		} else {
-      		preclass = "internal"
+      		location = "internal"
     		}
  		}
 	}
@@ -916,18 +892,38 @@ process classify {
 
 	}
 
+	if (peaks == "two" & location == "terminal") {
+  		term_dist <- len - (abs(minus_term - plus_term))
+ 		if (term_dist <= 20) {
+    		class = "COS"
+    	if (plus_term < minus_term) {
+      		subclass = "5 prime"
+   		 } else {
+     		subclass = "3 prime"
+    	}
+  	} else {
+    	class = "DTR"
+   		print(class)
+   		if (term_dist < 1000) {
+      		subclass = "short"
+    	} else {
+     		 subclass = "long"
+    	} 
+    	}
+	}
+
 	category <- c("len", "num_sig_plus", "num_sig_minus", "peaks",
                   "plus_term", "plus_term_tau",
                   "minus_term", "minus_term_tau",
-                  "preclass", "subclass", "class", "term_dist")
+                  "location", "subclass", "class", "term_dist")
     value <- c(len, num_sig_plus, num_sig_minus, peaks, 
                 plus_term, plus_term_tau,
                 minus_term, minus_term_tau,
-                preclass, subclass, class, term_dist)
+                location, subclass, class, term_dist)
 
 	print(value)
 
-	# Convert nested list to the dataframe by columns
+	# Convert lists to the dataframe by columns
 	df <- data.frame(category, value)
 	df
 
@@ -1019,6 +1015,9 @@ process report {
 	aveReadLen <- as.integer("$aveReadLen")
 	maxReadLen <- as.integer("$maxReadLen")
 
+	tau <- read.csv("$tau")
+	tau <- subset(tau, select=-X)
+
 	tau_stats <- read.csv("$tau_stats")
 	tau_stats <- subset(tau_stats, select=-X)
 
@@ -1033,7 +1032,7 @@ process report {
 	plus_term_tau <- classification[6,2]
 	minus_term <- classification[7,2]
 	minus_term_tau <- classification[8,2]
-	preclass <- classification[9,2]
+	location <- classification[9,2]
 	subclass <- classification[10,2]
 	class <- classification[11,2]
 	term_dist <- classification[12,2]
@@ -1052,6 +1051,36 @@ process report {
 
 	colnames(table) <- c('Position','Strand','Average Tau', 'Standard Deviation')
 
+	colours <- c("plus" = "springgreen4", "minus" = "purple")
+
+	ggtau <- ggplot(tau_stats) +
+		theme_calc() + 
+		geom_point(data=subset(tau_stats, strand == "f"), aes(x=pos_adj, y=avg_tau, colour="plus")) +
+		geom_point(data=subset(tau_stats, strand == "r"), aes(x=pos_adj, y=avg_tau, colour="minus")) +
+		geom_label_repel(data=subset(tau_stats, strand == "f" & pos_adj == plus_term), 
+                   aes(x=pos_adj, y=avg_tau, label=pos_adj), colour="springgreen4",
+                   show.legend = FALSE) + 
+		geom_label_repel(data=subset(tau_stats, strand == "r" & pos_adj == minus_term), 
+                   aes(x=pos_adj, y=avg_tau, label=pos_adj), colour="purple",
+                   show.legend = FALSE) +
+		labs(x = "Reference genome position",
+			y = "tau",
+			colour = "strand") +
+		scale_color_manual(values = colours) +
+		scale_x_continuous(labels = comma) +
+		scale_y_continuous(limits=c(0,1))
+
+	ggdepth <- ggplot(data=tau, aes(x=pos, y=cov)) +
+		geom_vline(xintercept=plus_term, linetype="dashed", colour="springgreen3", linewidth=1.1) +
+		geom_vline(xintercept=minus_term, linetype="dashed", colour="violet", linewidth=1.1) +
+		geom_line() +
+		theme_calc() +
+		labs(x = "Reference genome position",
+			y = "Read depth",
+			colour = "Strand") +
+		scale_color_manual(values = colours) +
+		guides(colour = guide_legend(override.aes = list(linewidth = 3)))
+
 	report <- read_docx() %>%
 		body_add_par(value = paste("NanoTerm Report: ", name), style = "heading 1") %>%
 		body_add_par("", style = "Normal") %>%
@@ -1069,16 +1098,20 @@ process report {
 		body_add_par(value = paste("Maximum read length: ", maxReadLen), style = "Normal") %>%
 		body_add_par("", style = "Normal") %>%
 		body_add_par("Phage prediction", style = "heading 2") %>%
+		body_add_par(value = paste("The predicted termini are", location, "within the reference genome."), style = "Normal") %>%
+		body_add_par(value = paste("Plus terminus: ", plus_term), style = "Normal") %>%
+		body_add_par(value = paste("Minus terminus: ", minus_term), style = "Normal") %>%
+		body_add_par(value = paste("The distance between predicted termini is", term_dist, "nucleotides."), style = "Normal") %>%
 		body_add_par(value = paste("Class: ", class), style = "Normal") %>%
+		body_add_par(value = paste("Subclass: ", subclass), style = "Normal") %>%
 		body_add_table(table, style = "table_template", first_column = TRUE) %>%
-		body_add_par("", style = "Normal")
-		
-	report <- body_add_par(report, "Figures", style = "heading 2") %>%
 		body_add_par("", style = "Normal") %>%
-
+		body_add_par("Figures", style = "heading 2") %>%
+		body_add_par("", style = "Normal") %>%
+		body_add_gg(value = ggtau, style = "centered", height = 3.25) %>%
 		body_add_par(value = "Figure 1. The tau value calculated for each genome position.") %>%
 		body_add_par("", style = "Normal") %>%
-
+		body_add_gg(value = ggdepth, style = "centered", height = 3.25) %>%
 		body_add_par(value = "Figure 2. The total read depth of the sequencing run, graphed as a rolling average with a window size equal to 1% of the reference genome length.  Black is the sum of forward and reverse read depth.")
  
 	print(report, target = "./report.docx")
