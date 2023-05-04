@@ -858,7 +858,7 @@ process classify {
   		if (plus_term <= 5 | minus_term >= (len - 5) | minus_term <= 5 | plus_term >= (len - 5)){
   			location = "terminal"
 			subclass = "NA"
-			term_dist <- "NA"
+			term_dist = "NA"
 			class = "NA"
   		} else if (plus_term > 5 & minus_term < (len - 5)) {
   			location = "internal"
@@ -892,6 +892,25 @@ process classify {
 
 	}
 
+	if (peaks == "two" & location == "internal") {
+		term_dist <- abs(minus_term - plus_term)
+  		if (term_dist <= 20) {
+    		class = "COS"
+    		if (plus_term < minus_term) {
+      			subclass = "5 prime"
+   			} else {
+      			subclass = "3 prime"
+   			}
+  		} else {
+   			class = "DTR"
+   		    if (term_dist < 1000) {
+      			subclass = "short"
+    		} else {
+      			subclass = "long"
+    		}
+	    }
+	}
+
 	if (peaks == "two" & location == "terminal") {
   		term_dist <- len - (abs(minus_term - plus_term))
  		if (term_dist <= 20) {
@@ -912,23 +931,12 @@ process classify {
     	}
 	}
 
-	category <- c("len", "num_sig_plus", "num_sig_minus", "peaks",
-                  "plus_term", "plus_term_tau",
-                  "minus_term", "minus_term_tau",
-                  "location", "subclass", "class", "term_dist")
-    value <- c(len, num_sig_plus, num_sig_minus, peaks, 
-                plus_term, plus_term_tau,
-                minus_term, minus_term_tau,
-                location, subclass, class, term_dist)
+	classification <- data.frame(len, num_sig_plus, num_sig_minus, peaks, 
+                             plus_term, plus_term_tau,
+                             minus_term, minus_term_tau,
+                             location, subclass, class, term_dist)
 
-	print(value)
-
-	# Convert lists to the dataframe by columns
-	df <- data.frame(category, value)
-	df
-
-	write.csv(df, "classification.csv")
-
+	write.csv(classification, "classification.csv")
 	"""
 }
 
@@ -1024,18 +1032,18 @@ process report {
 	classification <- read.csv("$classification")
 	classification <- subset(classification, select=-X)
 
-	len <- classification[1,2]
-	num_sig_plus <- classification[2,2]
-	num_sig_minus <- classification[3,2]
-	peaks <- classification[4,2]
-	plus_term <- classification[5,2]
-	plus_term_tau <- classification[6,2]
-	minus_term <- classification[7,2]
-	minus_term_tau <- classification[8,2]
-	location <- classification[9,2]
-	subclass <- classification[10,2]
-	class <- classification[11,2]
-	term_dist <- classification[12,2]
+	len <- classification[1,1]
+	num_sig_plus <- classification[1,2]
+	num_sig_minus <- classification[1,3]
+	peaks <- classification[1,4]
+	plus_term <- classification[1,5]
+	plus_term_tau <- classification[1,6]
+	minus_term <- classification[1,7]
+	minus_term_tau <- classification[1,8]
+	location <- classification[1,9]
+	subclass <- classification[1,10]
+	class <- classification[1,11]
+	term_dist <- classification[1,12]
 
 	top_5_plus <- tau_stats %>% 
   		filter(strand == "f") %>%
@@ -1051,7 +1059,14 @@ process report {
 
 	colnames(table) <- c('Position','Strand','Average Tau', 'Standard Deviation')
 
-	colours <- c("plus" = "springgreen4", "minus" = "purple")
+	colours <- c("plus" = "springgreen4", "minus" = "purple", "both" = "brown4")
+
+	sum_cov <- tau %>%
+            group_by(pos) %>%
+            summarise(
+                covs = sum(cov))
+
+	window <- 0.01 * len
 
 	ggtau <- ggplot(tau_stats) +
 		theme_calc() + 
@@ -1070,16 +1085,19 @@ process report {
 		scale_x_continuous(labels = comma) +
 		scale_y_continuous(limits=c(0,1))
 
-	ggdepth <- ggplot(data=tau, aes(x=pos, y=cov)) +
-		geom_vline(xintercept=plus_term, linetype="dashed", colour="springgreen3", linewidth=1.1) +
-		geom_vline(xintercept=minus_term, linetype="dashed", colour="violet", linewidth=1.1) +
-		geom_line() +
-		theme_calc() +
-		labs(x = "Reference genome position",
-			y = "Read depth",
-			colour = "Strand") +
-		scale_color_manual(values = colours) +
-		guides(colour = guide_legend(override.aes = list(linewidth = 3)))
+	ggdepth <- ggplot() +
+ 		geom_vline(xintercept=plus_term, linetype="dashed", colour="springgreen3", linewidth=1) +
+  		geom_vline(xintercept=minus_term, linetype="dashed", colour="violet", linewidth=1) +
+  		geom_line(data=sum_cov, aes(colour="both", x=pos, y=rollmean(covs, window, na.pad = TRUE, align = "right"))) +
+  		geom_line(data=subset(tau, strand == "f"), aes(colour="plus", x=pos, y=rollmean(cov, window, na.pad = TRUE, align = "right"))) +
+  		geom_line(data=subset(tau, strand == "r"), aes(colour="minus", x=pos, y=rollmean(cov, window, na.pad = TRUE, align = "right"))) +
+  		theme_calc() +
+  		labs(x = "Reference genome position",
+       		y = "Read depth",
+      		colour = "Strand") +
+  		scale_color_manual(values = colours) +
+  		scale_x_continuous(labels = comma) +
+  		guides(colour = guide_legend(override.aes = list(linewidth = 3)))
 
 	report <- read_docx() %>%
 		body_add_par(value = paste("NanoTerm Report: ", name), style = "heading 1") %>%
@@ -1112,7 +1130,7 @@ process report {
 		body_add_par(value = "Figure 1. The tau value calculated for each genome position.") %>%
 		body_add_par("", style = "Normal") %>%
 		body_add_gg(value = ggdepth, style = "centered", height = 3.25) %>%
-		body_add_par(value = "Figure 2. The total read depth of the sequencing run, graphed as a rolling average with a window size equal to 1% of the reference genome length.  Black is the sum of forward and reverse read depth.")
+		body_add_par(value = "Figure 2. The total read depth of the sequencing run, graphed as a rolling average with a window size equal to 1% of the reference genome length.")
  
 	print(report, target = "./report.docx")
 
