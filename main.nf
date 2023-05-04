@@ -969,11 +969,22 @@ process terminalReads {
 	plus_term="$(cat !{classification} | tr -d '"' | awk -F "," '$1 == "1" {print $6}')"
 	minus_term="$(cat !{classification} | tr -d '"' | awk -F "," '$1 == "1" {print $8}')"
 
-	region="$(echo input_reference:$plus_term-$minus_term)"
+	if [ $peaks == "two" ]
+	then
+		terminalReads=TRUE
+		if [ $plus_term -lt $minus_term ]
+		then
+			region="$(echo input_reference:$plus_term-$minus_term)"
+		elif [ $plus_term -gt $minus_term ]
+		then
+			region="$(echo input_reference:$minus_term-$plus_term)"
+		fi
+	fi
 
 	echo $peaks
 	echo $location
 	echo $region
+	echo $terminalReads
 
 	samtools view -b aln_sorted.bam \"$region\" > term_aln.bam
 	'''
