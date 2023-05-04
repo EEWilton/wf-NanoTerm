@@ -955,6 +955,7 @@ process terminalReads {
 		
 	output:
 		path 'term_aln.bam'
+		env terminalReads
 
 	shell:
 	'''
@@ -963,10 +964,16 @@ process terminalReads {
 	samtools sort aln.bam > aln_sorted.bam
 	samtools index aln_sorted.bam
 	
-	plus_term="$(cat !{classification} | tr -d '"' | awk -F "," '$2 == "plus_term" {print $3}')"
-	minus_term="$(cat !{classification} | tr -d '"' | awk -F "," '$2 == "minus_term" {print $3}')"
+	location="$(cat !{classification} | tr -d '"' | awk -F "," '$1 == "1" {print $10}')"
+	peaks="$(cat !{classification} | tr -d '"' | awk -F "," '$1 == "1" {print $5}')"
+	plus_term="$(cat !{classification} | tr -d '"' | awk -F "," '$1 == "1" {print $6}')"
+	minus_term="$(cat !{classification} | tr -d '"' | awk -F "," '$1 == "1" {print $8}')"
 
 	region="$(echo input_reference:$plus_term-$minus_term)"
+
+	echo $peaks
+	echo $location
+	echo $region
 
 	samtools view -b aln_sorted.bam \"$region\" > term_aln.bam
 	'''
@@ -1136,7 +1143,6 @@ process report {
 
 	"""
 }
-	
 
 process doc2pdf {
 	publishDir "${params.out_dir}", mode: 'copy', overwrite: true
