@@ -1012,6 +1012,8 @@ process report {
 		path tau_circ5
 		path all_tau
 		path tau_stats
+		path term_aln
+		val terminalReads
 
 
 	output:
@@ -1032,6 +1034,9 @@ process report {
 	library("zoo")
 	library("stringr")
 	library("seqinr")
+	library("GenomicRanges")
+	library("GenomicAlignments")
+	library("ggbio")
 
 	date <- format(Sys.Date())
 	name <- as.character("$name")
@@ -1049,6 +1054,16 @@ process report {
 
 	classification <- read.csv("$classification")
 	classification <- subset(classification, select=-X)
+	
+	terminalReads <- $terminalReads
+
+	if (terminalReads == TRUE) {
+		term_aln <- readGAlignments("$term_aln", use.names = TRUE)
+		ggterm <- autoplot(term_aln, facets = strand ~ ., aes(fill = strand))
+		png("ggterm.png")
+		print(ggterm)
+		dev.off()
+	}
 
 	len <- classification[1,1]
 	num_sig_plus <- classification[1,2]
@@ -1074,17 +1089,15 @@ process report {
   		head(5)
 
 	table <- rbind(top_5_plus, top_5_minus)
-
 	colnames(table) <- c('Position','Strand','Average Tau', 'Standard Deviation')
 
 	colours <- c("plus" = "springgreen4", "minus" = "purple", "both" = "brown4")
+	window <- 0.01 * len
 
 	sum_cov <- tau %>%
             group_by(pos) %>%
             summarise(
                 covs = sum(cov))
-
-	window <- 0.01 * len
 
 	ggtau <- ggplot(tau_stats) +
 		theme_calc() + 
@@ -1148,10 +1161,12 @@ process report {
 		body_add_par(value = "Figure 1. The tau value calculated for each genome position.") %>%
 		body_add_par("", style = "Normal") %>%
 		body_add_gg(value = ggdepth, style = "centered", height = 3.25) %>%
-		body_add_par(value = "Figure 2. The total read depth of the sequencing run, graphed as a rolling average with a window size equal to 1% of the reference genome length.")
+		body_add_par(value = "Figure 2. The total read depth of the sequencing run, graphed as a rolling average with a window size equal to 1% of the reference genome length.") %>%
+ 		body_add_par("", style = "Normal") %>%
+		body_add_img(src = "ggterm.png", style = "centered", width = 3.25, height = 3.25) %>%
+		body_add_par(value = "Figure 3. Reads that cover part or all of the region between the predicted termini.")
  
 	print(report, target = "./report.docx")
-
 	"""
 }
 
@@ -1184,6 +1199,6 @@ workflow {
 	tau_ch = tau(len_ch, bed_ch, cov_ch)
 	class_ch = classify(len_ch, tau_ch, name_ch, alnstats_ch, seq_ch, ref_ch, plat_ch)
 	termreads_ch = terminalReads(aln_ch, class_ch)
-	report_ch = report(seq_ch, ref_ch, name_ch, plat_ch, alnstats_ch, class_ch, tau_ch)
+	report_ch = report(seq_ch, ref_ch, name_ch, plat_ch, alnstats_ch, class_ch, tau_ch, termreads_ch)
 	doc2pdf(report_ch)
 }
