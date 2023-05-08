@@ -1057,14 +1057,6 @@ process report {
 	
 	terminalReads <- $terminalReads
 
-	if (terminalReads == TRUE) {
-		term_aln <- readGAlignments("$term_aln", use.names = TRUE)
-		ggterm <- autoplot(term_aln, facets = strand ~ ., aes(fill = strand))
-		png("ggterm.png")
-		print(ggterm)
-		dev.off()
-	}
-
 	len <- classification[1,1]
 	num_sig_plus <- classification[1,2]
 	num_sig_minus <- classification[1,3]
@@ -1091,7 +1083,7 @@ process report {
 	table <- rbind(top_5_plus, top_5_minus)
 	colnames(table) <- c('Position','Strand','Average Tau', 'Standard Deviation')
 
-	colours <- c("plus" = "springgreen4", "minus" = "purple", "both" = "brown4")
+	colours <- c("plus" = "#1B9E77", "minus" = "#7570B3", "both" = "brown4")
 	window <- 0.01 * len
 
 	sum_cov <- tau %>%
@@ -1099,15 +1091,23 @@ process report {
             summarise(
                 covs = sum(cov))
 
+	if (terminalReads == TRUE) {
+		term_aln <- readGAlignments("$term_aln", use.names = TRUE)
+		ggterm <- autoplot(term_aln, facets = strand ~ ., aes(fill = strand))
+		png("ggterm.png", width = 6, height = 9, units = "in", res = 300)
+		print(ggterm)
+		dev.off()
+	}
+
 	ggtau <- ggplot(tau_stats) +
 		theme_calc() + 
 		geom_point(data=subset(tau_stats, strand == "f"), aes(x=pos_adj, y=avg_tau, colour="plus")) +
 		geom_point(data=subset(tau_stats, strand == "r"), aes(x=pos_adj, y=avg_tau, colour="minus")) +
 		geom_label_repel(data=subset(tau_stats, strand == "f" & pos_adj == plus_term), 
-                   aes(x=pos_adj, y=avg_tau, label=pos_adj), colour="springgreen4",
+                   aes(x=pos_adj, y=avg_tau, label=pos_adj), colour="#1B9E77",
                    show.legend = FALSE) + 
 		geom_label_repel(data=subset(tau_stats, strand == "r" & pos_adj == minus_term), 
-                   aes(x=pos_adj, y=avg_tau, label=pos_adj), colour="purple",
+                   aes(x=pos_adj, y=avg_tau, label=pos_adj), colour="#7570B3",
                    show.legend = FALSE) +
 		labs(x = "Reference genome position",
 			y = "tau",
@@ -1163,7 +1163,7 @@ process report {
 		body_add_gg(value = ggdepth, style = "centered", height = 3.25) %>%
 		body_add_par(value = "Figure 2. The total read depth of the sequencing run, graphed as a rolling average with a window size equal to 1% of the reference genome length.") %>%
  		body_add_par("", style = "Normal") %>%
-		body_add_img(src = "ggterm.png", style = "centered", width = 3.25, height = 3.25) %>%
+		body_add_img(src = "ggterm.png", style = "centered", width = 6, height = 9) %>%
 		body_add_par(value = "Figure 3. Reads that cover part or all of the region between the predicted termini.")
  
 	print(report, target = "./report.docx")
