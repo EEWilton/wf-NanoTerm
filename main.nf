@@ -1093,7 +1093,7 @@ process report {
 
 	if (terminalReads == TRUE) {
 		term_aln <- readGAlignments("$term_aln", use.names = TRUE)
-		ggterm <- autoplot(term_aln, facets = strand ~ ., aes(fill = strand))
+		ggterm <- autoplot(term_aln, facets = strand ~ ., xlab="Reference genome position", aes(fill = strand))
 		png("ggterm.png", width = 6, height = 9, units = "in", res = 300)
 		print(ggterm)
 		dev.off()
