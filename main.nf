@@ -997,16 +997,29 @@ process terminalReads {
 
 	region=NA
 	terminalReads=FALSE
-
-	if [ $peaks == "two" ]
+	if [ $location == "internal"]
 	then
-		terminalReads=TRUE
-		if [ $plus_term -lt $minus_term ]
+		if [ $peaks == "two" ]
 		then
-			region="$(echo input_reference:$plus_term-$minus_term)"
-		elif [ $plus_term -gt $minus_term ]
+			terminalReads=TRUE
+			if [ $plus_term -lt $minus_term ]
+			then
+				region="$(echo input_reference:$plus_term-$minus_term)"
+			elif [ $plus_term -gt $minus_term ]
+			then
+				region="$(echo input_reference:$minus_term-$plus_term)"
+			fi
+		fi
+		if [ $peaks == "one" ]
 		then
-			region="$(echo input_reference:$minus_term-$plus_term)"
+			terminalReads=TRUE
+			if [ plus_term == NA ]
+			then
+				region="$(echo input_reference:($minus_term - 10)-($minus_term + 10))"
+			elif [ minus_term == NA ]
+			then
+				region="$(echo input_reference:($plus_term - 10)-($plus_term + 10))"
+			fi
 		fi
 	fi
 
@@ -1015,7 +1028,10 @@ process terminalReads {
 	echo $region
 	echo $terminalReads
 
-	samtools view -b aln_sorted.bam \"$region\" > term_aln.bam
+	if [ region != NA ]
+	then
+		samtools view -b aln_sorted.bam \"$region\" > term_aln.bam
+	fi
 	'''
 }
 
@@ -1123,7 +1139,9 @@ process report {
 	if (terminalReads == TRUE) {
 		term_aln <- readGAlignments("$term_aln", use.names = TRUE)
 		ggterm <- autoplot(term_aln, facets = strand ~ ., xlab="Reference genome position",
-			geom = "rect", aes(fill = strand, colour = strand))
+			geom = "rect", aes(fill = strand, colour = strand)) +
+  			geom_vline(xintercept=plus_term, linetype="dashed", colour="springgreen3", linewidth=1) + 
+  			geom_vline(xintercept=minus_term, linetype="dashed", colour="violet", linewidth=1)
 		png("ggterm.png", width = 6, height = 9, units = "in", res = 300)
 		print(ggterm)
 		dev.off()
@@ -1194,7 +1212,7 @@ process report {
 		body_add_par(value = "Figure 2. The total read depth of the sequencing run, graphed as a rolling average with a window size equal to 1% of the reference genome length.") %>%
  		body_add_par("", style = "Normal")
 	if (terminalReads == TRUE){
-		report + body_add_img(report, src = "ggterm.png", style = "centered", width = 6, height = 9) %>%
+		report <- body_add_img(report, src = "ggterm.png", style = "centered", width = 6, height = 9) %>%
 		body_add_par(value = "Figure 3. Reads that cover part or all of the region between the predicted termini.")
 	}
 	print(report, target = "./report.docx")
