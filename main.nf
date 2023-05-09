@@ -917,7 +917,10 @@ process classify {
 	}
 
 	if (peaks == "two" & location == "terminal") {
-  		term_dist <- len - (abs(minus_term - plus_term))
+  		term_dist_ext <- len - (abs(minus_term - plus_term))
+		term_dist_int <- abs(minus_term - plus_term)
+		dists <- c(term_dist_ext, term_dist_int)
+		term_dist <- min(dists)
  		if (term_dist <= 20) {
     		class = "COS"
     	if (plus_term < minus_term) {
