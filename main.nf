@@ -827,7 +827,7 @@ process classify {
 	}
 
 	if (num_sig_minus == 0){
- 		 minus_term = NA
+ 		minus_term = NA
  	 	minus_term_tau = NA
 	} else {
  		minus_term <- as.integer(top_sig_minus[1,1])
@@ -883,13 +883,18 @@ process classify {
  		}
 	}
 
-
 	if (peaks == "none"){
-
+		location = NA
+		class = "headful without packaging site or Mu-like"
+		subclass = NA
+		term_dist = NA
 	}
 
 	if (peaks == "multiple") {
-
+		location = NA
+		class = "multiple"
+		subclass = NA
+		term_dist = NA
 	}
 
 	if (peaks == "two" & location == "internal") {
@@ -931,6 +936,27 @@ process classify {
     	}
 	}
 
+	if (peaks == "one" & location == "internal") {
+		term_dist = NA
+		class = "pac"
+  		if (is.na(plus_term)) {
+			subclass = "reverse"
+		} else {
+			subclass = "forward"
+		}
+	}
+
+	if (peaks == "one" & location == "terminal") {
+  		term_dist = NA
+ 		class = "pac"
+  		if (is.na(plus_term)) {
+			subclass = "reverse"
+		} else {
+			subclass = "forward"
+		}
+	}
+
+
 	classification <- data.frame(len, num_sig_plus, num_sig_minus, peaks, 
                              plus_term, plus_term_tau,
                              minus_term, minus_term_tau,
@@ -968,6 +994,9 @@ process terminalReads {
 	peaks="$(cat !{classification} | tr -d '"' | awk -F "," '$1 == "1" {print $5}')"
 	plus_term="$(cat !{classification} | tr -d '"' | awk -F "," '$1 == "1" {print $6}')"
 	minus_term="$(cat !{classification} | tr -d '"' | awk -F "," '$1 == "1" {print $8}')"
+
+	region=NA
+	terminalReads=FALSE
 
 	if [ $peaks == "two" ]
 	then
@@ -1093,7 +1122,8 @@ process report {
 
 	if (terminalReads == TRUE) {
 		term_aln <- readGAlignments("$term_aln", use.names = TRUE)
-		ggterm <- autoplot(term_aln, facets = strand ~ ., xlab="Reference genome position", aes(fill = strand))
+		ggterm <- autoplot(term_aln, facets = strand ~ ., xlab="Reference genome position",
+			geom = "rect", aes(fill = strand, colour = strand))
 		png("ggterm.png", width = 6, height = 9, units = "in", res = 300)
 		print(ggterm)
 		dev.off()
@@ -1162,10 +1192,11 @@ process report {
 		body_add_par("", style = "Normal") %>%
 		body_add_gg(value = ggdepth, style = "centered", height = 3.25) %>%
 		body_add_par(value = "Figure 2. The total read depth of the sequencing run, graphed as a rolling average with a window size equal to 1% of the reference genome length.") %>%
- 		body_add_par("", style = "Normal") %>%
-		body_add_img(src = "ggterm.png", style = "centered", width = 6, height = 9) %>%
+ 		body_add_par("", style = "Normal")
+	if (terminalReads == TRUE){
+		report + body_add_img(report, src = "ggterm.png", style = "centered", width = 6, height = 9) %>%
 		body_add_par(value = "Figure 3. Reads that cover part or all of the region between the predicted termini.")
- 
+	}
 	print(report, target = "./report.docx")
 	"""
 }
