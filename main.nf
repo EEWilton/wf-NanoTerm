@@ -927,7 +927,6 @@ process classify {
     	}
   	} else {
     	class = "DTR"
-   		print(class)
    		if (term_dist < 1000) {
       		subclass = "short"
     	} else {
@@ -1035,6 +1034,7 @@ process terminalReads {
 	'''
 }
 
+// This process outputs a .docx report on the findings
 process report {
 	publishDir "${params.out_dir}", mode: 'copy', overwrite: true
 
@@ -1219,6 +1219,7 @@ process report {
 	"""
 }
 
+// This process converts to the .docx report to a PDF
 process doc2pdf {
 	publishDir "${params.out_dir}", mode: 'copy', overwrite: true
 	
