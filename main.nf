@@ -995,20 +995,12 @@ process terminalReads {
 		path classification
 		
 	output:
-		path 'term_aln.bam', optional: true
-		path 'term_aln_circ3.bam', optional: true
+		path 'term_aln.bam'
+		path 'term_aln_circ3.bam'
 		env terminalReads
-
+		
 	shell:
 	'''
-	samtools view -b !{aln} > aln.bam
-	samtools sort aln.bam > aln_sorted.bam
-	samtools index aln_sorted.bam
-
-	samtools view -b !{aln_circ3} > aln_circ3.bam
-	samtools sort aln_circ3.bam > aln_circ3_sorted.bam
-	samtools index aln_circ3_sorted.bam
-	
 	location="$(cat !{classification} | tr -d '"' | awk -F "," '$1 == "1" {print $10}')"
 	peaks="$(cat !{classification} | tr -d '"' | awk -F "," '$1 == "1" {print $5}')"
 	plus_term="$(cat !{classification} | tr -d '"' | awk -F "," '$1 == "1" {print $6}')"
@@ -1042,7 +1034,11 @@ process terminalReads {
 				region="$(echo input_reference:($plus_term - 10)-($plus_term + 10))"
 			fi
 		fi
+		samtools view -b !{aln} > aln.bam
+		samtools sort aln.bam > aln_sorted.bam
+		samtools index aln_sorted.bam
 		samtools view -b aln_sorted.bam \"$region\" > term_aln.bam
+		touch term_aln_circ3.bam
 	fi
 
 	if [ $location == "terminal" ]
@@ -1069,7 +1065,17 @@ process terminalReads {
 				region="$(echo circular_permutation_3:($plus_term_circ3 - 10)-($plus_term_circ3 + 10))"
 			fi
 		fi
+		samtools view -b !{aln_circ3} > aln_circ3.bam
+		samtools sort aln_circ3.bam > aln_circ3_sorted.bam
+		samtools index aln_circ3_sorted.bam
 		samtools view -b aln_circ3_sorted.bam \"$region\" > term_aln_circ3.bam
+		touch term_aln.bam
+	fi
+
+	if [ $location == "internal" ]
+	then
+		touch term_aln.bam
+		touch term_aln_circ3.bam
 	fi
 	'''
 }
@@ -1186,7 +1192,8 @@ process report {
 		term_aln <- readGAlignments("$term_aln", use.names = TRUE)
 		ggterm <- autoplot(term_aln, facets = strand ~ ., xlab="Reference genome position",
 			geom = "rect", aes(fill = strand, colour = strand)) +
-  			geom_vline(xintercept=plus_term, linetype="dashed", colour="springgreen3", linewidth=1) + 
+  			theme_calc() + 
+			geom_vline(xintercept=plus_term, linetype="dashed", colour="springgreen3", linewidth=1) + 
   			geom_vline(xintercept=minus_term, linetype="dashed", colour="violet", linewidth=1)
 		png("ggterm.png", width = 6, height = 9, units = "in", res = 300)
 		print(ggterm)
@@ -1197,7 +1204,8 @@ process report {
 		term_aln <- readGAlignments("$term_aln_circ3", use.names = TRUE)
 		ggterm <- autoplot(term_aln, facets = strand ~ ., xlab="Reference genome position",
 			geom = "rect", aes(fill = strand, colour = strand)) +
-  			geom_vline(xintercept=plus_term_circ3, linetype="dashed", colour="springgreen3", linewidth=1) + 
+  			theme_calc() + 
+			geom_vline(xintercept=plus_term_circ3, linetype="dashed", colour="springgreen3", linewidth=1) + 
   			geom_vline(xintercept=minus_term_circ3, linetype="dashed", colour="violet", linewidth=1)
 		png("ggterm.png", width = 6, height = 9, units = "in", res = 300)
 		print(ggterm)
