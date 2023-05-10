@@ -1093,6 +1093,8 @@ process report {
 	unmappedReads <- as.integer("$unmappedReads")
 	aveReadLen <- as.integer("$aveReadLen")
 	maxReadLen <- as.integer("$maxReadLen")
+	percentMapped <- format(((mappedReads / totalReads) * 100), digits=3)
+	percentUnmapped <- format(((unmappedReads / totalReads) * 100), digits=3)
 
 	tau <- read.csv("$tau")
 	tau <- subset(tau, select=-X)
@@ -1130,6 +1132,9 @@ process report {
 
 	table <- rbind(top_5_plus, top_5_minus)
 	colnames(table) <- c('Position','Strand','Average Tau', 'Standard Deviation')
+	table[table=="f"] <- "plus"
+	table[table=="r"] <- "minus"
+	table <- format(table, digits = 2)
 
 	colours <- c("plus" = "#1B9E77", "minus" = "#7570B3", "both" = "brown4")
 	window <- 0.01 * len
@@ -1185,27 +1190,28 @@ process report {
 		body_add_par(value = paste("NanoTerm Report: ", name), style = "heading 1") %>%
 		body_add_par("", style = "Normal") %>%
 		body_add_par("Run details", style = "heading 2") %>%
-		body_add_par(value = paste("Generated on: ", date), style = "Normal") %>%
-		body_add_par(value = paste("Input sequences: ", "$params.fastq"), style = "Normal") %>%
-		body_add_par(value = paste("Reference genome: ", "$params.reference"), style = "Normal") %>%
-		body_add_par(value = paste("Reference genome length: ", len), style = "Normal") %>%
+		body_add_par(value = paste("Generated on: ", date, sep = ""), style = "Normal") %>%
+		body_add_par(value = paste("Input sequences: ", "$params.fastq", sep = ""), style = "Normal") %>%
+		body_add_par(value = paste("Reference genome: ", "$params.reference", sep = ""), style = "Normal") %>%
+		body_add_par(value = paste("Reference genome length: ", len, sep = ""), style = "Normal") %>%
 		body_add_par("Alignment details", style = "heading 2") %>%
-		body_add_par(value = paste("Sequencing platform:", "$params.seqplat"), style = "Normal") %>%
-		body_add_par(value = paste("Number of sequence reads: ", totalReads), style = "Normal") %>%
-		body_add_par(value = paste("Number of reads aligned: ", mappedReads), style = "Normal") %>%
-		body_add_par(value = paste("Number of reads not aligned: ", unmappedReads), style = "Normal") %>%
-		body_add_par(value = paste("Average read length: ", aveReadLen), style = "Normal") %>%
-		body_add_par(value = paste("Maximum read length: ", maxReadLen), style = "Normal") %>%
-		body_add_par("", style = "Normal") %>%
+		body_add_par(value = paste("Sequencing platform: ", "$params.seqplat", sep = ""), style = "Normal") %>%
+		body_add_par(value = paste("Number of sequence reads: ", totalReads, sep = ""), style = "Normal") %>%
+		body_add_par(value = paste("Number of reads mapped: ", mappedReads, " (", percentMapped, "%)", sep = ""), style = "Normal") %>%
+		body_add_par(value = paste("Number of reads not mapped: ", unmappedReads, " (", percentUnmapped, "%)", sep = ""), style = "Normal") %>%
+		body_add_par(value = paste("Average read length: ", aveReadLen, sep = ""), style = "Normal") %>%
+		body_add_par(value = paste("Maximum read length: ", maxReadLen, sep = ""), style = "Normal") %>%
 		body_add_par("Phage prediction", style = "heading 2") %>%
-		body_add_par(value = paste("The predicted termini are", location, "within the reference genome."), style = "Normal") %>%
-		body_add_par(value = paste("Plus terminus: ", plus_term), style = "Normal") %>%
-		body_add_par(value = paste("Minus terminus: ", minus_term), style = "Normal") %>%
-		body_add_par(value = paste("The distance between predicted termini is", term_dist, "nucleotides."), style = "Normal") %>%
-		body_add_par(value = paste("Class: ", class), style = "Normal") %>%
-		body_add_par(value = paste("Subclass: ", subclass), style = "Normal") %>%
+		body_add_par(value = paste("The predicted termini are ", location, " within the reference genome.", sep = ""), style = "Normal") %>%
+		body_add_par(value = paste("Plus terminus: ", plus_term, sep = ""), style = "Normal") %>%
+		body_add_par(value = paste("Minus terminus: ", minus_term, sep = ""), style = "Normal") %>%
+		body_add_par(value = paste("The distance between predicted termini is ", term_dist, " nucleotides.", sep = ""), style = "Normal") %>%
+		body_add_par(value = paste("Class: ", class, sep = ""), style = "Normal") %>%
+		body_add_par(value = paste("Subclass: ", subclass, sep = ""), style = "Normal") %>%
+		body_add_par("", style = "Normal") %>%
 		body_add_table(table, style = "table_template", first_column = TRUE) %>%
 		body_add_par("", style = "Normal") %>%
+		body_add_break(pos = "after") %>%
 		body_add_par("Figures", style = "heading 2") %>%
 		body_add_par("", style = "Normal") %>%
 		body_add_gg(value = ggtau, style = "centered", height = 3.25) %>%
