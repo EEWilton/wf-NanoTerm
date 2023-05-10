@@ -807,6 +807,9 @@ process classify {
 	tau_stats <- read.csv("$tau_stats")
 	tau_stats <- subset(tau_stats, select=-X)
 
+	tau_circ3 <- read.csv("$tau_circ3")
+	tau_circ3 <- subset(tau_circ3, select=-X)
+
 	top_sig_plus <- tau_stats %>%
   	filter(strand == "f" & avg_tau >= 0.1) %>%
   		arrange(desc(avg_tau))
@@ -958,11 +961,21 @@ process classify {
 		}
 	}
 
+	plus_term_circ3 <- tau_circ3 %>%
+						filter(pos_adj == plus_term & strand == "f") %>%
+						select(pos)
+	plus_term_circ3 <- as.integer(plus_term_circ3)
+
+	minus_term_circ3 <- tau_circ3 %>%
+						filter(pos_adj == minus_term & strand == "r") %>%
+						select(pos)
+	minus_term_circ3 <- as.integer(minus_term_circ3)
 
 	classification <- data.frame(len, num_sig_plus, num_sig_minus, peaks, 
                              plus_term, plus_term_tau,
                              minus_term, minus_term_tau,
-                             location, subclass, class, term_dist)
+                             location, subclass, class, term_dist,
+							 plus_term_circ3, minus_term_circ3)
 
 	write.csv(classification, "classification.csv")
 	"""
@@ -982,24 +995,30 @@ process terminalReads {
 		path classification
 		
 	output:
-		path 'term_aln.bam'
+		path 'term_aln.bam', optional: true
+		path 'term_aln_circ3.bam', optional: true
 		env terminalReads
 
 	shell:
 	'''
 	samtools view -b !{aln} > aln.bam
-	
 	samtools sort aln.bam > aln_sorted.bam
 	samtools index aln_sorted.bam
+
+	samtools view -b !{aln_circ3} > aln_circ3.bam
+	samtools sort aln_circ3.bam > aln_circ3_sorted.bam
+	samtools index aln_circ3_sorted.bam
 	
 	location="$(cat !{classification} | tr -d '"' | awk -F "," '$1 == "1" {print $10}')"
 	peaks="$(cat !{classification} | tr -d '"' | awk -F "," '$1 == "1" {print $5}')"
 	plus_term="$(cat !{classification} | tr -d '"' | awk -F "," '$1 == "1" {print $6}')"
 	minus_term="$(cat !{classification} | tr -d '"' | awk -F "," '$1 == "1" {print $8}')"
+	plus_term_circ3="$(cat !{classification} | tr -d '"' | awk -F "," '$1 == "1" {print $14}')"
+	minus_term_circ3="$(cat !{classification} | tr -d '"' | awk -F "," '$1 == "1" {print $15}')"
 
 	region=NA
 	terminalReads=FALSE
-	if [ $location == "internal"]
+	if [ $location == "internal" ]
 	then
 		if [ $peaks == "two" ]
 		then
@@ -1023,16 +1042,34 @@ process terminalReads {
 				region="$(echo input_reference:($plus_term - 10)-($plus_term + 10))"
 			fi
 		fi
+		samtools view -b aln_sorted.bam \"$region\" > term_aln.bam
 	fi
 
-	echo $peaks
-	echo $location
-	echo $region
-	echo $terminalReads
-
-	if [ region != NA ]
+	if [ $location == "terminal" ]
 	then
-		samtools view -b aln_sorted.bam \"$region\" > term_aln.bam
+		if [ $peaks == "two" ]
+		then
+			terminalReads=TRUE
+			if [ $plus_term_circ3 -lt $minus_term_circ3 ]
+			then
+				region="$(echo circular_permutation_3:$plus_term_circ3-$minus_term_circ3)"
+			elif [ $plus_term_circ3 -gt $minus_term_circ3 ]
+			then
+				region="$(echo circular_permutation_3:$minus_term_circ3-$plus_term_circ3)"
+			fi
+		fi
+		if [ $peaks == "one" ]
+		then
+			terminalReads=TRUE
+			if [ $plus_term_circ3 == NA ]
+			then
+				region="$(echo circular_permutation_3:($minus_term_circ3 - 10)-($minus_term_circ3 + 10))"
+			elif [ $minus_term_circ3 == NA ]
+			then
+				region="$(echo circular_permutation_3:($plus_term_circ3 - 10)-($plus_term_circ3 + 10))"
+			fi
+		fi
+		samtools view -b aln_circ3_sorted.bam \"$region\" > term_aln_circ3.bam
 	fi
 	'''
 }
@@ -1061,8 +1098,8 @@ process report {
 		path all_tau
 		path tau_stats
 		path term_aln
+		path term_aln_circ3
 		val terminalReads
-
 
 	output:
 		path 'report.docx'
@@ -1119,7 +1156,9 @@ process report {
 	subclass <- classification[1,10]
 	class <- classification[1,11]
 	term_dist <- classification[1,12]
-
+	plus_term_circ3 <- classification[1,13]
+	minus_term_circ3 <- classification[1,14]
+	
 	top_5_plus <- tau_stats %>% 
   		filter(strand == "f") %>%
  		arrange(desc(avg_tau)) %>%
@@ -1141,15 +1180,25 @@ process report {
 
 	sum_cov <- tau %>%
             group_by(pos) %>%
-            summarise(
-                covs = sum(cov))
+            summarise(covs = sum(cov))
 
-	if (terminalReads == TRUE) {
+	if (terminalReads == TRUE & location == "internal") {
 		term_aln <- readGAlignments("$term_aln", use.names = TRUE)
 		ggterm <- autoplot(term_aln, facets = strand ~ ., xlab="Reference genome position",
 			geom = "rect", aes(fill = strand, colour = strand)) +
   			geom_vline(xintercept=plus_term, linetype="dashed", colour="springgreen3", linewidth=1) + 
   			geom_vline(xintercept=minus_term, linetype="dashed", colour="violet", linewidth=1)
+		png("ggterm.png", width = 6, height = 9, units = "in", res = 300)
+		print(ggterm)
+		dev.off()
+	}
+
+	if (terminalReads == TRUE & location == "terminal") {
+		term_aln <- readGAlignments("$term_aln_circ3", use.names = TRUE)
+		ggterm <- autoplot(term_aln, facets = strand ~ ., xlab="Reference genome position",
+			geom = "rect", aes(fill = strand, colour = strand)) +
+  			geom_vline(xintercept=plus_term_circ3, linetype="dashed", colour="springgreen3", linewidth=1) + 
+  			geom_vline(xintercept=minus_term_circ3, linetype="dashed", colour="violet", linewidth=1)
 		png("ggterm.png", width = 6, height = 9, units = "in", res = 300)
 		print(ggterm)
 		dev.off()
