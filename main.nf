@@ -95,8 +95,6 @@ process permute {
 	break4 = br*4
 	break5 = br*5
 
-	print(break4)
-
 	seq1 = refseq[break1:] + refseq[:break1]
 	seq2 = refseq[break2:] + refseq[:break2]
 	seq3 = refseq[break3:] + refseq[:break3]
@@ -804,6 +802,8 @@ process classify {
 
 	len <- $genLen
 
+	print(len)
+
 	tau_stats <- read.csv("$tau_stats")
 	tau_stats <- subset(tau_stats, select=-X)
 
@@ -1293,11 +1293,11 @@ process doc2pdf {
 		path report
 		
 	output:
-		path 'report.pdf', optional: true
+		path 'report.pdf'
 	
 	script:
 	"""
-	libreoffice --headless --convert-to pdf $report --outdir $params.out_dir
+	libreoffice --safe-mode --headless --convert-to pdf $report --outdir $params.out_dir
 	"""	
 }
 
