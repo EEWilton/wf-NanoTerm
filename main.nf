@@ -1297,7 +1297,7 @@ process doc2pdf {
 	
 	script:
 	"""
-	libreoffice --safe-mode --headless --convert-to pdf $report --outdir $params.out_dir
+	pandoc -f docx -t pdf -o report.pdf $params.out_dir/$report 
 	"""	
 }
 
