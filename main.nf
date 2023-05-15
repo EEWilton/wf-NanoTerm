@@ -176,6 +176,7 @@ process mapping {
 }
 
 // This process extracts some statistics from the alignment to the original reference genome
+// It also outputs the file name of the reference file for use in the report
 process alignStats {
 	input:
 		path aln
@@ -184,6 +185,7 @@ process alignStats {
 		path aln_circ3
 		path aln_circ4
 		path aln_circ5
+		path reference
 		
 	output:
 		env totalReads
@@ -191,6 +193,7 @@ process alignStats {
 		env unmappedReads
 		env aveReadLen
 		env maxReadLen
+		env refName
 	
 	script:
 		"""
@@ -201,6 +204,8 @@ process alignStats {
 		unmappedReads=`grep "reads unmapped:" aln_stats.txt | grep -oz [[:digit:]]`
 		aveReadLen=`grep "average length:" aln_stats.txt | grep -oz [[:digit:]]`
 		maxReadLen=`grep "maximum length:" aln_stats.txt | grep -oz [[:digit:]]`
+
+		refName=`basename $reference`
 		"""
 }
 
@@ -786,6 +791,7 @@ process classify {
 		val unmappedReads
 		val aveReadLen
 		val maxReadLen
+		val refName
 		path fastq
 		path reference
 		val seqplat
@@ -1085,7 +1091,6 @@ process report {
 	publishDir "${params.out_dir}", mode: 'copy', overwrite: true
 
 	input:
-		path fastq
 		path reference
 		val name
 		val seqplat
@@ -1094,6 +1099,7 @@ process report {
 		val unmappedReads
 		val aveReadLen
 		val maxReadLen
+		val refName
 		path classification
 		path tau
 		path tau_circ1
@@ -1248,8 +1254,7 @@ process report {
 		body_add_par("", style = "Normal") %>%
 		body_add_par("Run details", style = "heading 2") %>%
 		body_add_par(value = paste("Generated on: ", date, sep = ""), style = "Normal") %>%
-		body_add_par(value = paste("Input sequences: ", "$params.fastq", sep = ""), style = "Normal") %>%
-		body_add_par(value = paste("Reference genome: ", "$params.reference", sep = ""), style = "Normal") %>%
+		body_add_par(value = paste("Reference genome: ", "$refName", sep = ""), style = "Normal") %>%
 		body_add_par(value = paste("Reference genome length: ", len, sep = ""), style = "Normal") %>%
 		body_add_par("Alignment details", style = "heading 2") %>%
 		body_add_par(value = paste("Sequencing platform: ", "$params.seqplat", sep = ""), style = "Normal") %>%
@@ -1309,13 +1314,13 @@ workflow {
 	refseq_ch = refSeq(ref_ch)
 	circ_ch = permute(refseq_ch)
 	aln_ch = mapping(plat_ch, refseq_ch, allseq_ch, circ_ch)
-	alnstats_ch = alignStats(aln_ch)
+	alnstats_ch = alignStats(aln_ch, ref_ch)
 	sep_ch = strandSep(aln_ch)
 	bed_ch = bed(sep_ch)
 	cov_ch = cov(sep_ch)
 	tau_ch = tau(len_ch, bed_ch, cov_ch)
 	class_ch = classify(len_ch, tau_ch, name_ch, alnstats_ch, seq_ch, ref_ch, plat_ch)
 	termreads_ch = terminalReads(aln_ch, class_ch)
-	report_ch = report(seq_ch, ref_ch, name_ch, plat_ch, alnstats_ch, class_ch, tau_ch, termreads_ch)
+	report_ch = report(ref_ch, name_ch, plat_ch, alnstats_ch, class_ch, tau_ch, termreads_ch)
 	doc2pdf(report_ch)
 }
