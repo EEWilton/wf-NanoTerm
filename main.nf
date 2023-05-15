@@ -1297,7 +1297,7 @@ process doc2pdf {
 	
 	script:
 	"""
-	pandoc -f docx -t pdf -o report.pdf $params.out_dir/$report 
+	pandoc -f docx -t latex -o report.pdf $report 
 	"""	
 }
 
