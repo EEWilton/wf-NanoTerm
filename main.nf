@@ -1207,7 +1207,7 @@ process report {
   			theme_calc() + 
 			geom_vline(xintercept=plus_term_circ3, linetype="dashed", colour="springgreen3", linewidth=1) + 
   			geom_vline(xintercept=minus_term_circ3, linetype="dashed", colour="violet", linewidth=1)
-		png("ggterm.png", width = 6, height = 9, units = "in", res = 300)
+		png("ggterm.png", width = 5, height = 8, units = "in", res = 300)
 		print(ggterm)
 		dev.off()
 	}
@@ -1274,11 +1274,12 @@ process report {
 		body_add_gg(value = ggtau, style = "centered", height = 3.25) %>%
 		body_add_par(value = "Figure 1. The tau value calculated for each genome position.") %>%
 		body_add_par("", style = "Normal") %>%
+		body_add_par("", style = "Normal") %>%
 		body_add_gg(value = ggdepth, style = "centered", height = 3.25) %>%
 		body_add_par(value = "Figure 2. The total read depth of the sequencing run, graphed as a rolling average with a window size equal to 1% of the reference genome length.") %>%
  		body_add_par("", style = "Normal")
 	if (terminalReads == TRUE){
-		report <- body_add_img(report, src = "ggterm.png", style = "centered", width = 6, height = 9) %>%
+		report <- body_add_img(report, src = "ggterm.png", style = "centered", width = 5, height = 8) %>%
 		body_add_par(value = "Figure 3. Reads that cover part or all of the region between the predicted termini.")
 	}
 	print(report, target = "./report.docx")
@@ -1297,7 +1298,7 @@ process doc2pdf {
 	
 	script:
 	"""
-	pandoc -f docx -t latex -o report.pdf $report 
+	pandoc -V geometry:margin=1in -f docx -t latex -o report.pdf $report 
 	"""	
 }
 
