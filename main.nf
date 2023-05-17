@@ -1086,6 +1086,66 @@ process terminalReads {
 	'''
 }
 
+// This process extracts the DTR or COS sequences
+// It also rearranges the genome based on the predicted termini
+process fastaOut {
+	publishDir "${params.out_dir}", mode: 'copy', overwrite: true
+
+	input:
+		path classification
+		path refseq
+		path circular_permutation1
+		path circular_permutation2
+		path circular_permutation3
+		path circular_permutation4
+		path circular_permutation5
+
+	output:
+		path 'rearranged_genome.fasta'
+
+	script:
+		"""
+		#!/usr/bin/env python3
+
+		import pandas
+		df = pandas.read_csv('classification.csv')
+		plus_term = df.iat[0,5]
+		minus_term = df.iat[0,7]
+		type = df.iat[0,11]
+		location = df.iat[0,9]
+		plus_term_circ3 = df.iat[0,13]
+		minus_term_circ3 = df.iat[0,14]
+
+		if location == "internal":
+			f = open('refseq.fasta', 'r')
+			next(f)
+			for line in f:
+				refseq = str(line.rstrip())
+			f.close()
+
+			newseq = refseq[plus_term:] + refseq[:minus_term]
+
+			sourceFile = open('rearranged_genome.fasta', 'w')
+			print('>rearranged_reference_genome', file = sourceFile)
+			print(newseq, file = sourceFile)
+			sourceFile.close()
+		
+		if location == "terminal":
+			f = open('circular_permutation3.fasta', 'r')
+			next(f)
+			for line in f:
+				refseq = str(line.rstrip())
+			f.close()
+
+			newseq = refseq[plus_term_circ3:] + refseq[:minus_term_circ3]
+
+			sourceFile = open('rearranged_genome.fasta', 'w')
+			print('>rearranged_reference_genome', file = sourceFile)
+			print(newseq, file = sourceFile)
+			sourceFile.close()
+		"""
+}
+
 // This process outputs a .docx report on the findings
 process report {
 	publishDir "${params.out_dir}", mode: 'copy', overwrite: true
@@ -1323,4 +1383,5 @@ workflow {
 	termreads_ch = terminalReads(aln_ch, class_ch)
 	report_ch = report(ref_ch, name_ch, plat_ch, alnstats_ch, class_ch, tau_ch, termreads_ch)
 	doc2pdf(report_ch)
+	fastaOut(refseq_ch, class_ch, circ_ch)
 }
