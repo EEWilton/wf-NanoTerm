@@ -773,8 +773,6 @@ process tau {
 
 // This process classifies the phage based on the termini, distance, etc
 process classify {
-	publishDir "${params.out_dir}", mode: 'copy', overwrite: true
-
 	input:
 		val genLen
 		path tau
@@ -1334,11 +1332,12 @@ process fastaOut {
 		plus_term = df.iat[0,5]
 		minus_term = df.iat[0,7]
 		type = df.iat[0,11]
+		subclass = df.iat[0,10]
 		location = df.iat[0,9]
 		plus_term_circ3 = df.iat[0,13]
 		minus_term_circ3 = df.iat[0,14]
 
-		if location == "internal":
+		if location == "internal" and type == "DTR":
 			f = open('refseq.fasta', 'r')
 			next(f)
 			for line in f:
@@ -1352,21 +1351,14 @@ process fastaOut {
 			print(newseq, file = sourceFile)
 			sourceFile.close()
 		
-			if type == "DTR":
-				f = open('refseq.fasta', 'r')
-				next(f)
-				for line in f:
-					refseq = str(line.rstrip())
-				f.close()
+			DTRseq = refseq[plus_term:minus_term]
 
-				DTRseq = refseq[plus_term:minus_term]
+			sourceFile = open('DTR_sequence.fasta', 'w')
+			print('>DTR_sequence', file = sourceFile)
+			print(DTRseq, file = sourceFile)
+			sourceFile.close()
 
-				sourceFile = open('DTR_sequence.fasta', 'w')
-				print('>DTR_sequence', file = sourceFile)
-				print(DTRseq, file = sourceFile)
-				sourceFile.close()
-
-		if location == "terminal":
+		if location == "terminal" and type == "DTR":
 			f = open('circular_permutation3.fasta', 'r')
 			next(f)
 			for line in f:
@@ -1380,19 +1372,40 @@ process fastaOut {
 			print(newseq, file = sourceFile)
 			sourceFile.close()
 						
-			if type == "DTR":
-				f = open('circular_permutation3.fasta', 'r')
-				next(f)
-				for line in f:
-					refseq = str(line.rstrip())
-				f.close()
+			DTRseq = refseq[plus_term_circ3:minus_term_circ3]
 
-				DTRseq = refseq[plus_term_circ3:minus_term_circ3]
+			sourceFile = open('DTR_sequence.fasta', 'w')
+			print('>DTR_sequence', file = sourceFile)
+			print(DTRseq, file = sourceFile)
+			sourceFile.close()
 
-				sourceFile = open('DTR_sequence.fasta', 'w')
-				print('>DTR_sequence', file = sourceFile)
-				print(DTRseq, file = sourceFile)
-				sourceFile.close()
+		if location == "internal" and type == "COS":
+			f = open('refseq.fasta', 'r')
+			next(f)
+			for line in f:
+				refseq = str(line.rstrip())
+			f.close()
+
+			newseq = refseq[plus_term:] + refseq[:minus_term]
+
+			sourceFile = open('rearranged_genome.fasta', 'w')
+			print('>rearranged_reference_genome', file = sourceFile)
+			print(newseq, file = sourceFile)
+			sourceFile.close()
+		
+		if location == "terminal" and type == "COS":
+			f = open('circular_permutation3.fasta', 'r')
+			next(f)
+			for line in f:
+				refseq = str(line.rstrip())
+			f.close()
+
+			newseq = refseq[plus_term_circ3:] + refseq[:minus_term_circ3]
+
+			sourceFile = open('rearranged_genome.fasta', 'w')
+			print('>rearranged_reference_genome', file = sourceFile)
+			print(newseq, file = sourceFile)
+			sourceFile.close()
 		"""
 }
 
