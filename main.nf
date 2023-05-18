@@ -751,12 +751,16 @@ process tau {
 	write.csv(tau_circ5, "tau_circ5.csv")
 	
 	all_tau <- rbind(tau, tau_circ1, tau_circ2, tau_circ3, tau_circ4, tau_circ5)
-		
+	
+	write.csv(all_tau, "all_tau.csv")
+	
 	for (i in 1:dim(all_tau)[1]) {
-		if (all_tau[i, 'strand'] == "f" & all_tau[i, 'pos'] == 1 & all_tau[i, 'tau'] == 1){
-			all_tau[i, 'tau'] <- NA
-		} else if (all_tau[i, 'strand']  == "r" & all_tau[i, 'pos'] == len & all_tau[i, 'tau'] == 1){
-			all_tau[i, 'tau'] <- NA
+		if (!is.na(all_tau[i, 'tau'])) {
+			if (all_tau[i, 'strand'] == "f" & all_tau[i, 'pos'] == 1 & all_tau[i, 'tau'] == 1){
+				all_tau[i, 'tau'] <- NA
+			} else if (all_tau[i, 'strand']  == "r" & all_tau[i, 'pos'] == len & all_tau[i, 'tau'] == 1){
+				all_tau[i, 'tau'] <- NA
+			}
 		}
 	}
 	
