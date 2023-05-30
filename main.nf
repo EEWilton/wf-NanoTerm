@@ -439,154 +439,145 @@ process tau {
 	f_bed <- read.table("$aln_f", quote="\\"", comment.char="",
                     colClasses=c("character","numeric","numeric","NULL","NULL","NULL"))
 	f_bed <- setNames(f_bed, c("chr","start","end"))
-	f_bed['start'] <- f_bed['start'] + 1
+	f_bed\$start <- f_bed\$start + 1
 
 	r_bed <- read.table("$aln_r", quote="\\"", comment.char="",
                     colClasses=c("character","numeric","numeric","NULL","NULL","NULL"))
 	r_bed <- setNames(r_bed, c("chr","start","end"))
-	r_bed['start'] <- r_bed['start'] + 1
+	r_bed\$start <- r_bed\$start + 1
 
 	f_bed_circ1 <- read.table("$aln_f_circ1", quote="\\"", comment.char="",
                     colClasses=c("character","numeric","numeric","NULL","NULL","NULL"))
 	f_bed_circ1 <- setNames(f_bed_circ1, c("chr","start","end"))
-	f_bed_circ1['start'] <- f_bed_circ1['start'] + 1
+	f_bed_circ1\$start <- f_bed_circ1\$start + 1
 
 	r_bed_circ1 <- read.table("$aln_r_circ1", quote="\\"", comment.char="",
                     colClasses=c("character","numeric","numeric","NULL","NULL","NULL"))
 	r_bed_circ1 <- setNames(r_bed_circ1, c("chr","start","end"))
-	r_bed_circ1['start'] <- r_bed_circ1['start'] + 1
+	r_bed_circ1\$start <- r_bed_circ1\$start + 1
 
 	f_bed_circ2 <- read.table("$aln_f_circ2", quote="\\"", comment.char="",
                     colClasses=c("character","numeric","numeric","NULL","NULL","NULL"))
 	f_bed_circ2 <- setNames(f_bed_circ2, c("chr","start","end"))
-	f_bed_circ2['start'] <- f_bed_circ2['start'] + 1
+	f_bed_circ2\$start <- f_bed_circ2\$start + 1
 
 	r_bed_circ2 <- read.table("$aln_r_circ2", quote="\\"", comment.char="",
                     colClasses=c("character","numeric","numeric","NULL","NULL","NULL"))
 	r_bed_circ2 <- setNames(r_bed_circ2, c("chr","start","end"))
-	r_bed_circ2['start'] <- r_bed_circ2['start'] + 1
+	r_bed_circ2\$start <- r_bed_circ2\$start + 1
 
 	f_bed_circ3 <- read.table("$aln_f_circ3", quote="\\"", comment.char="",
                     colClasses=c("character","numeric","numeric","NULL","NULL","NULL"))
 	f_bed_circ3 <- setNames(f_bed_circ3, c("chr","start","end"))
-	f_bed_circ3['start'] <- f_bed_circ3['start'] + 1
+	f_bed_circ3\$start <- f_bed_circ3\$start + 1
 
 	r_bed_circ3 <- read.table("$aln_r_circ3", quote="\\"", comment.char="",
                     colClasses=c("character","numeric","numeric","NULL","NULL","NULL"))
 	r_bed_circ3 <- setNames(r_bed_circ3, c("chr","start","end"))
-	r_bed_circ3['start'] <- r_bed_circ3['start'] + 1
+	r_bed_circ3\$start <- r_bed_circ3\$start + 1
 	
 	f_bed_circ4 <- read.table("$aln_f_circ4", quote="\\"", comment.char="",
                     colClasses=c("character","numeric","numeric","NULL","NULL","NULL"))
 	f_bed_circ4 <- setNames(f_bed_circ4, c("chr","start","end"))
-	f_bed_circ4['start'] <- f_bed_circ4['start'] + 1
+	f_bed_circ4\$start <- f_bed_circ4\$start + 1
 
 	r_bed_circ4 <- read.table("$aln_r_circ4", quote="\\"", comment.char="",
                     colClasses=c("character","numeric","numeric","NULL","NULL","NULL"))
 	r_bed_circ4 <- setNames(r_bed_circ4, c("chr","start","end"))
-	r_bed_circ4['start'] <- r_bed_circ4['start'] + 1
+	r_bed_circ4\$start <- r_bed_circ4\$start + 1
 	
 	f_bed_circ5 <- read.table("$aln_f_circ5", quote="\\"", comment.char="",
                     colClasses=c("character","numeric","numeric","NULL","NULL","NULL"))
 	f_bed_circ5 <- setNames(f_bed_circ5, c("chr","start","end"))
-	f_bed_circ5['start'] <- f_bed_circ5['start'] + 1
+	f_bed_circ5\$start <- f_bed_circ5\$start + 1
 
 	r_bed_circ5 <- read.table("$aln_r_circ5", quote="\\"", comment.char="",
                     colClasses=c("character","numeric","numeric","NULL","NULL","NULL"))
 	r_bed_circ5 <- setNames(r_bed_circ5, c("chr","start","end"))
-	r_bed_circ5['start'] <- r_bed_circ5['start'] + 1
+	r_bed_circ5\$start <- r_bed_circ5\$start + 1
 
 
 	f_cov <- read.table("$aln_f_cov", quote="\\"", comment.char="",
                     colClasses=c("character","numeric","numeric"))
 	f_cov <- setNames(f_cov, c("chr","pos","cov"))
-	f_cov['strand'] <- "f"
+	f_cov\$strand <- "f"
 
 	r_cov <- read.table("$aln_r_cov", quote="\\"", comment.char="",
                     colClasses=c("character","numeric","numeric"))
 	r_cov <- setNames(r_cov, c("chr","pos","cov"))
-	r_cov['strand'] <- "r"
+	r_cov\$strand <- "r"
 	
 	f_cov_circ1 <- read.table("$aln_f_cov_circ1", quote="\\"", comment.char="",
                     colClasses=c("character","numeric","numeric"))
 	f_cov_circ1 <- setNames(f_cov_circ1, c("chr","pos","cov"))
-	f_cov_circ1['strand'] <- "f"
+	f_cov_circ1\$strand <- "f"
 
 	r_cov_circ1 <- read.table("$aln_r_cov_circ1", quote="\\"", comment.char="",
                     colClasses=c("character","numeric","numeric"))
 	r_cov_circ1 <- setNames(r_cov_circ1, c("chr","pos","cov"))
-	r_cov_circ1['strand'] <- "r"
+	r_cov_circ1\$strand <- "r"
 	
 	f_cov_circ2 <- read.table("$aln_f_cov_circ2", quote="\\"", comment.char="",
                     colClasses=c("character","numeric","numeric"))
 	f_cov_circ2 <- setNames(f_cov_circ2, c("chr","pos","cov"))
-	f_cov_circ2['strand'] <- "f"
+	f_cov_circ2\$strand <- "f"
 
 	r_cov_circ2 <- read.table("$aln_r_cov_circ2", quote="\\"", comment.char="",
                     colClasses=c("character","numeric","numeric"))
 	r_cov_circ2 <- setNames(r_cov_circ2, c("chr","pos","cov"))
-	r_cov_circ2['strand'] <- "r"
+	r_cov_circ2\$strand <- "r"
 
 	f_cov_circ3 <- read.table("$aln_f_cov_circ3", quote="\\"", comment.char="",
                     colClasses=c("character","numeric","numeric"))
 	f_cov_circ3 <- setNames(f_cov_circ3, c("chr","pos","cov"))
-	f_cov_circ3['strand'] <- "f"
+	f_cov_circ3\$strand <- "f"
 
 	r_cov_circ3 <- read.table("$aln_r_cov_circ3", quote="\\"", comment.char="",
                     colClasses=c("character","numeric","numeric"))
 	r_cov_circ3 <- setNames(r_cov_circ3, c("chr","pos","cov"))
-	r_cov_circ3['strand'] <- "r"
+	r_cov_circ3\$strand <- "r"
 
 	f_cov_circ4 <- read.table("$aln_f_cov_circ4", quote="\\"", comment.char="",
                     colClasses=c("character","numeric","numeric"))
 	f_cov_circ4 <- setNames(f_cov_circ4, c("chr","pos","cov"))
-	f_cov_circ4['strand'] <- "f"
+	f_cov_circ4\$strand <- "f"
 
 	r_cov_circ4 <- read.table("$aln_r_cov_circ4", quote="\\"", comment.char="",
                     colClasses=c("character","numeric","numeric"))
 	r_cov_circ4 <- setNames(r_cov_circ4, c("chr","pos","cov"))
-	r_cov_circ4['strand'] <- "r"	
+	r_cov_circ4\$strand <- "r"	
 
 	f_cov_circ5 <- read.table("$aln_f_cov_circ5", quote="\\"", comment.char="",
                     colClasses=c("character","numeric","numeric"))
 	f_cov_circ5 <- setNames(f_cov_circ5, c("chr","pos","cov"))
-	f_cov_circ5['strand'] <- "f"
+	f_cov_circ5\$strand <- "f"
 
 	r_cov_circ5 <- read.table("$aln_r_cov_circ5", quote="\\"", comment.char="",
                     colClasses=c("character","numeric","numeric"))
 	r_cov_circ5 <- setNames(r_cov_circ5, c("chr","pos","cov"))
-	r_cov_circ5['strand'] <- "r"	
+	r_cov_circ5\$strand <- "r"	
 		
 	
 	f_spc <- data.frame(pos = pos, SPC = 0)
 	r_spc <- data.frame(pos = pos, SPC = 0)
 
 	for (nt in pos){
-		f_spc[nt,'SPC'] <- length(which(f_bed['start']==nt))
+		f_spc[nt,'SPC'] <- length(which(f_bed\$start==nt))
 		}
 	
 	for (nt in pos){
-		r_spc[nt,'SPC'] <- length(which(r_bed['end']==nt))
+		r_spc[nt,'SPC'] <- length(which(r_bed\$end==nt))
 		}
 	
 	f_tau <- merge(f_cov, f_spc, by="pos")
 	r_tau <- merge(r_cov, r_spc, by="pos")
 	
 	tau <- rbind(f_tau, r_tau)
-	tau['tau'] <- tau['SPC'] / tau['cov']
+	tau\$tau <- tau\$SPC / tau\$cov
 	
-	for (i in 1:dim(tau)[1]) {
-		tau[i, 'pos_fix'] <- tau[i, 'pos'] 
-	}
+	tau\$pos_fix <- tau\$pos 
+	tau\$pos_adj <- ifelse(tau\$pos_fix > len, tau\$pos_fix - len, tau\$pos_fix)
 
-	for (i in 1:dim(tau)[1]) {
-		if (tau[i, 'pos_fix'] > len) {
-			tau[i, 'pos_adj'] <- tau[i, 'pos_fix'] - len
-		} else {
-			tau[i, 'pos_adj'] <- tau[i, 'pos_fix']
-		}
-	}
-	
 	tau <- subset(tau, select=-pos_fix)
 	write.csv(tau, "tau.csv")
 	
@@ -594,63 +585,46 @@ process tau {
 	r_spc_circ1 <- data.frame(pos = pos, SPC = 0)
 
 	for (nt in pos){
-		f_spc_circ1[nt,'SPC'] <- length(which(f_bed_circ1['start']==nt))
+		f_spc_circ1[nt,'SPC'] <- length(which(f_bed_circ1\$start==nt))
 		}
 	
 	for (nt in pos){
-		r_spc_circ1[nt,'SPC'] <- length(which(r_bed_circ1['end']==nt))
+		r_spc_circ1[nt,'SPC'] <- length(which(r_bed_circ1\$end==nt))
 		}
 	
 	f_tau_circ1 <- merge(f_cov_circ1, f_spc_circ1, by="pos")
 	r_tau_circ1 <- merge(r_cov_circ1, r_spc_circ1, by="pos")
 	
 	tau_circ1 <- rbind(f_tau_circ1, r_tau_circ1)
-	tau_circ1['tau'] <- tau_circ1['SPC'] / tau_circ1['cov']
-	
-	for (i in 1:dim(tau_circ1)[1]) {
-		tau_circ1[i, 'pos_fix'] <- tau_circ1[i, 'pos'] + break1 
-	}
-
-	for (i in 1:dim(tau_circ1)[1]) {
-		if (tau_circ1[i, 'pos_fix'] > len) {
-				tau_circ1[i, 'pos_adj'] <- tau_circ1[i, 'pos_fix'] - len
-		} else {
-			tau_circ1[i, 'pos_adj'] <- tau_circ1[i, 'pos_fix']
-		}
-	}
+	tau_circ1\$tau <- tau_circ1\$SPC / tau_circ1\$cov
+			
+	tau_circ1\$pos_fix <- tau_circ1\$pos + break1
+	tau_circ1\$pos_adj <- ifelse(tau_circ1\$pos_fix > len, tau_circ1\$pos_fix - len, tau_circ1\$pos_fix)
 	
 	tau_circ1 <- subset(tau_circ1, select=-pos_fix)
+
 	write.csv(tau_circ1, "tau_circ1.csv")
 	
 	f_spc_circ2 <- data.frame(pos = pos, SPC = 0)
 	r_spc_circ2 <- data.frame(pos = pos, SPC = 0)
 
 	for (nt in pos){
-		f_spc_circ2[nt,'SPC'] <- length(which(f_bed_circ2['start']==nt))
+		f_spc_circ2[nt,'SPC'] <- length(which(f_bed_circ2\$start==nt))
 		}
 	
 	for (nt in pos){
-		r_spc_circ2[nt,'SPC'] <- length(which(r_bed_circ2['end']==nt))
+		r_spc_circ2[nt,'SPC'] <- length(which(r_bed_circ2\$end==nt))
 		}
 	
 	f_tau_circ2 <- merge(f_cov_circ2, f_spc_circ2, by="pos")
 	r_tau_circ2 <- merge(r_cov_circ2, r_spc_circ2, by="pos")
 	
 	tau_circ2 <- rbind(f_tau_circ2, r_tau_circ2)
-	tau_circ2['tau'] <- tau_circ2['SPC'] / tau_circ2['cov']
+	tau_circ2\$tau <- tau_circ2\$SPC / tau_circ2\$cov
 
-	for (i in 1:dim(tau_circ2)[1]) {
-		tau_circ2[i, 'pos_fix']<- tau_circ2[i, 'pos'] + break2 
-	}
-
-	for (i in 1:dim(tau_circ2)[1]) {
-		if (tau_circ2[i, 'pos_fix'] > len) {
-			tau_circ2[i, 'pos_adj'] <- tau_circ2[i, 'pos_fix'] - len
-		} else {
-		tau_circ2[i, 'pos_adj'] <- tau_circ2[i, 'pos_fix']
-		}
-	}
-
+	tau_circ2\$pos_fix <- tau_circ2\$pos + break2
+	tau_circ2\$pos_adj <- ifelse(tau_circ2\$pos_fix > len, tau_circ2\$pos_fix - len, tau_circ2\$pos_fix)
+	
 	tau_circ2 <- subset(tau_circ2, select=-pos_fix)
 	write.csv(tau_circ2, "tau_circ2.csv")
 
@@ -658,30 +632,22 @@ process tau {
 	r_spc_circ3 <- data.frame(pos = pos, SPC = 0)
 
 	for (nt in pos){
-		f_spc_circ3[nt,'SPC'] <- length(which(f_bed_circ3['start']==nt))
+		f_spc_circ3[nt,'SPC'] <- length(which(f_bed_circ3\$start==nt))
 		}
 	
 	for (nt in pos){
-		r_spc_circ3[nt,'SPC'] <- length(which(r_bed_circ3['end']==nt))
+		r_spc_circ3[nt,'SPC'] <- length(which(r_bed_circ3\$end==nt))
 		}
 	
 	f_tau_circ3 <- merge(f_cov_circ3, f_spc_circ3, by="pos")
 	r_tau_circ3 <- merge(r_cov_circ3, r_spc_circ3, by="pos")
 	
 	tau_circ3 <- rbind(f_tau_circ3, r_tau_circ3)
-	tau_circ3['tau'] <- tau_circ3['SPC'] / tau_circ3['cov']
+	tau_circ3\$tau <- tau_circ3\$SPC / tau_circ3\$cov
 	
-	for (i in 1:dim(tau_circ3)[1]) {
-		tau_circ3[i, 'pos_fix'] <- tau_circ3[i, 'pos'] + break3 
-	}
-
-	for (i in 1:dim(tau_circ3)[1]) {
-		if (tau_circ3[i, 'pos_fix'] > len) {
-			tau_circ3[i, 'pos_adj'] <- tau_circ3[i, 'pos_fix'] - len
-		} else {
-			tau_circ3[i, 'pos_adj'] <- tau_circ3[i, 'pos_fix']
-		}
-	}
+	tau_circ3\$pos_fix <- tau_circ3\$pos + break3
+	tau_circ3\$pos_adj <- ifelse(tau_circ3\$pos_fix > len, tau_circ3\$pos_fix - len, tau_circ3\$pos_fix)
+	
 	
 	tau_circ3 <- subset(tau_circ3, select=-pos_fix)
 	write.csv(tau_circ3, "tau_circ3.csv")
@@ -690,31 +656,22 @@ process tau {
 	r_spc_circ4 <- data.frame(pos = pos, SPC = 0)
 
 	for (nt in pos){
-		f_spc_circ4[nt,'SPC'] <- length(which(f_bed_circ4['start']==nt))
+		f_spc_circ4[nt,'SPC'] <- length(which(f_bed_circ4\$start==nt))
 		}
 	
 	for (nt in pos){
-		r_spc_circ4[nt,'SPC'] <- length(which(r_bed_circ4['end']==nt))
+		r_spc_circ4[nt,'SPC'] <- length(which(r_bed_circ4\$end==nt))
 		}
 	
 	f_tau_circ4 <- merge(f_cov_circ4, f_spc_circ4, by="pos")
 	r_tau_circ4 <- merge(r_cov_circ4, r_spc_circ4, by="pos")
 	
 	tau_circ4 <- rbind(f_tau_circ4, r_tau_circ4)
-	tau_circ4['tau'] <- tau_circ4['SPC'] / tau_circ4['cov']
+	tau_circ4\$tau <- tau_circ4\$SPC / tau_circ4\$cov
 	
-	for (i in 1:dim(tau_circ4)[1]) {
-		tau_circ4[i, 'pos_fix'] <- tau_circ4[i, 'pos'] + break4 
-	}
-
-	for (i in 1:dim(tau_circ4)[1]) {
-		if (tau_circ4[i, 'pos_fix'] > len) {
-			tau_circ4[i, 'pos_adj'] <- tau_circ4[i, 'pos_fix'] - len
-		} else {
-			tau_circ4[i, 'pos_adj'] <- tau_circ4[i, 'pos_fix']
-		}
-	}
-	
+	tau_circ4\$pos_fix <- tau_circ4\$pos + break4
+	tau_circ4\$pos_adj <- ifelse(tau_circ4\$pos_fix > len, tau_circ4\$pos_fix - len, tau_circ4\$pos_fix)
+		
 	tau_circ4 <- subset(tau_circ4, select=-pos_fix)
 	write.csv(tau_circ4, "tau_circ4.csv")
 	
@@ -722,31 +679,22 @@ process tau {
 	r_spc_circ5 <- data.frame(pos = pos, SPC = 0)
 
 	for (nt in pos){
-		f_spc_circ5[nt,'SPC'] <- length(which(f_bed_circ5['start']==nt))
+		f_spc_circ5[nt,'SPC'] <- length(which(f_bed_circ5\$start==nt))
 		}
 	
 	for (nt in pos){
-		r_spc_circ5[nt,'SPC'] <- length(which(r_bed_circ5['end']==nt))
+		r_spc_circ5[nt,'SPC'] <- length(which(r_bed_circ5\$end==nt))
 		}
 	
 	f_tau_circ5 <- merge(f_cov_circ5, f_spc_circ5, by="pos")
 	r_tau_circ5 <- merge(r_cov_circ5, r_spc_circ5, by="pos")
 	
 	tau_circ5 <- rbind(f_tau_circ5, r_tau_circ5)
-	tau_circ5['tau'] <- tau_circ5['SPC'] / tau_circ5['cov']
+	tau_circ5\$tau <- tau_circ5\$SPC / tau_circ5\$cov
 	
-	for (i in 1:dim(tau_circ5)[1]) {
-		tau_circ5[i, 'pos_fix'] <- tau_circ5[i, 'pos'] + break5 
-	}
-
-	for (i in 1:dim(tau_circ5)[1]) {
-		if (tau_circ5[i, 'pos_fix'] > len) {
-			tau_circ5[i, 'pos_adj'] <- tau_circ5[i, 'pos_fix'] - len
-		} else {
-			tau_circ5[i, 'pos_adj'] <- tau_circ5[i, 'pos_fix']
-		}
-	}
-	
+	tau_circ5\$pos_fix <- tau_circ5\$pos + break5
+	tau_circ5\$pos_adj <- ifelse(tau_circ5\$pos_fix > len, tau_circ5\$pos_fix - len, tau_circ5\$pos_fix)
+		
 	tau_circ5 <- subset(tau_circ5, select=-pos_fix)
 	write.csv(tau_circ5, "tau_circ5.csv")
 	
