@@ -1198,6 +1198,42 @@ process report {
   		scale_x_continuous(labels = comma) +
   		guides(colour = guide_legend(override.aes = list(linewidth = 3)))
 
+	if (terminalReads == TRUE & location == "internal") {
+		print(terminalReads)
+		print(location)
+		strand.labs <- c("Strand: plus", "Strand: minus")
+		names(strand.labs) <- c("+", "-")
+		term_aln <- readGAlignments("$term_aln", use.names = TRUE)
+		print("term align in")
+		ggterm <- autoplot(term_aln, xlab="Reference genome position",
+			geom = "rect", aes(fill = strand, colour = strand), show.legend = FALSE) +
+ 			facet_grid(strand ~ ., labeller = labeller(strand = strand.labs)) +
+  			theme_calc() + 
+			geom_vline(xintercept=plus_term, linetype="dashed", colour="springgreen3", linewidth=1) + 
+  			geom_vline(xintercept=minus_term, linetype="dashed", colour="violet", linewidth=1)
+		print("figure made")
+		png("ggterm.png", width = 6, height = 8, units = "in", res = 300)
+		print(ggterm)
+		dev.off()
+	}
+
+	if (terminalReads == TRUE & location == "terminal") {
+		print(terminalReads)
+		print(location)
+		term_aln <- readGAlignments("$term_aln_circ3", use.names = TRUE)
+		strand.labs <- c("Strand: plus", "Strand: minus")
+		names(strand.labs) <- c("+", "-")
+		ggterm <-autoplot(term_aln, xlab="Reference genome position",
+			geom = "rect", aes(fill = strand, colour = strand), show.legend = FALSE) +
+ 			facet_grid(strand ~ ., labeller = labeller(strand = strand.labs)) +
+  			theme_calc() + 
+			geom_vline(xintercept=plus_term_circ3, linetype="dashed", colour="springgreen3", linewidth=1) + 
+  			geom_vline(xintercept=minus_term_circ3, linetype="dashed", colour="violet", linewidth=1)
+		png("ggterm.png", width = 6, height = 8, units = "in", res = 300)
+		print(ggterm)
+		dev.off()
+	}
+	
 	report <- read_docx() %>%
 		body_add_par(value = paste("NanoTerm Report: ", name), style = "heading 1") %>%
 		body_add_par("", style = "Normal") %>%
@@ -1247,6 +1283,15 @@ process report {
  			body_add_par("", style = "Normal")
 	}
 
+	if (terminalReads == TRUE & location == "internal"){
+		report <- body_add_img(report, src = "ggterm.png", style = "centered", width = 6, height = 8) %>%
+		body_add_par(value = "Figure 3. Reads that cover part or all of the region between the predicted termini.")
+	}
+	if (terminalReads == TRUE & location == "terminal"){
+		report <- body_add_img(report, src = "ggterm.png", style = "centered", width = 6, height = 8) %>%
+		body_add_par(value = "Figure 3. Reads that cover part or all of the region between the predicted termini.  Due to the terminal nature of the predicted termini, the read are mapped against the third circular permutation of the reference genome.")
+	}
+	
 	print(report, target = "./report.docx")
 	"""
 }
