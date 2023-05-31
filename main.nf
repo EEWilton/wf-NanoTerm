@@ -1209,30 +1209,34 @@ process report {
 		body_add_par(value = paste("Percentage of plus strand with no coverage: ", percent_uncov_f, "%", sep = ""), style = "Normal") %>%
 		body_add_par(value = paste("Percentage of minus strand with no coverage: ",  percent_uncov_r, "%", sep = ""), style = "Normal") %>%
 		body_add_par("Phage prediction", style = "heading 2")
-	if (location == "correct"){
-		report <- body_add_par(report, value = paste("The termini are predicted to be at ", plus_term, " and ", minus_term, ", which are the ends of the reference genome.  This indicates that the reference genome is correct and that this phage genome does not have terminal repeats, which would shift one of the predicted termini.", sep = ""))
+
+	if (percent_uncov_f > 10 | percent_uncov_r > 10) {
+
 	} else {
-		report <- body_add_par(report, value = paste("The predicted termini are ", location, " within the reference genome.", sep = ""), style = "Normal") %>%
-		body_add_par(value = paste("Plus terminus: ", plus_term, sep = ""), style = "Normal") %>%
-		body_add_par(value = paste("Minus terminus: ", minus_term, sep = ""), style = "Normal") %>%
-		body_add_par(value = paste("The distance between predicted termini is ", term_dist, " nucleotides.", sep = ""), style = "Normal") %>%
-		body_add_par(value = paste("Class: ", class, sep = ""), style = "Normal") %>%
-		body_add_par(value = paste("Subclass: ", subclass, sep = ""), style = "Normal")
+		if (location == "correct"){
+			report <- body_add_par(report, value = paste("The termini are predicted to be at ", plus_term, " and ", minus_term, ", which are the ends of the reference genome.  This indicates that the reference genome is correct and that this phage genome does not have terminal repeats, which would shift one of the predicted termini.", sep = ""))
+		} else {
+			report <- body_add_par(report, value = paste("The predicted termini are ", location, " within the reference genome.", sep = ""), style = "Normal") %>%
+			body_add_par(value = paste("Plus terminus: ", plus_term, sep = ""), style = "Normal") %>%
+			body_add_par(value = paste("Minus terminus: ", minus_term, sep = ""), style = "Normal") %>%
+			body_add_par(value = paste("The distance between predicted termini is ", term_dist, " nucleotides.", sep = ""), style = "Normal") %>%
+			body_add_par(value = paste("Class: ", class, sep = ""), style = "Normal") %>%
+			body_add_par(value = paste("Subclass: ", subclass, sep = ""), style = "Normal")
+		}
+		report <- body_add_par(report, "", style = "Normal") %>%
+			body_add_table(table, style = "table_template", first_column = TRUE) %>%
+			body_add_par("", style = "Normal") %>%
+			body_add_break(pos = "after") %>%
+			body_add_par("Figures", style = "heading 2") %>%
+			body_add_par("", style = "Normal") %>%
+			body_add_gg(value = ggtau, style = "centered", height = 3.25) %>%
+			body_add_par(value = "Figure 1. The tau value calculated for each genome position.") %>%
+			body_add_par("", style = "Normal") %>%
+			body_add_par("", style = "Normal") %>%
+			body_add_gg(value = ggdepth, style = "centered", height = 3.25) %>%
+			body_add_par(value = "Figure 2. The total read depth of the sequencing run, graphed as a rolling average with a window size equal to 1% of the reference genome length.") %>%
+ 			body_add_par("", style = "Normal")
 	}
-		
-	report <- body_add_par(report, "", style = "Normal") %>%
-		body_add_table(table, style = "table_template", first_column = TRUE) %>%
-		body_add_par("", style = "Normal") %>%
-		body_add_break(pos = "after") %>%
-		body_add_par("Figures", style = "heading 2") %>%
-		body_add_par("", style = "Normal") %>%
-		body_add_gg(value = ggtau, style = "centered", height = 3.25) %>%
-		body_add_par(value = "Figure 1. The tau value calculated for each genome position.") %>%
-		body_add_par("", style = "Normal") %>%
-		body_add_par("", style = "Normal") %>%
-		body_add_gg(value = ggdepth, style = "centered", height = 3.25) %>%
-		body_add_par(value = "Figure 2. The total read depth of the sequencing run, graphed as a rolling average with a window size equal to 1% of the reference genome length.") %>%
- 		body_add_par("", style = "Normal")
 
 	print(report, target = "./report.docx")
 	"""
