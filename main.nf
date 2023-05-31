@@ -1048,6 +1048,12 @@ process terminalReads {
 		touch term_aln.bam
 		touch term_aln_circ3.bam
 	fi
+
+	if [ $location == "correct" ]
+	then
+		touch term_aln.bam
+		touch term_aln_circ3.bam
+	fi
 	'''
 }
 
@@ -1273,7 +1279,7 @@ process fastaOut {
 		path circular_permutation5
 
 	output:
-		path 'rearranged_genome.fasta'
+		path 'rearranged_genome.fasta',  optional: true
 		path 'DTR_sequence.fasta', optional: true
 
 	script:
