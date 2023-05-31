@@ -864,7 +864,7 @@ process classify {
 	}
 
 	if (peaks == "multiple") {
-		location = NA
+		location = "multiple"
 		class = "multiple"
 		subclass = NA
 		term_dist = NA
@@ -1054,6 +1054,12 @@ process terminalReads {
 		touch term_aln.bam
 		touch term_aln_circ3.bam
 	fi
+
+	if [ $location == "multiple" ]
+	then
+		touch term_aln.bam
+		touch term_aln_circ3.bam
+	fi
 	'''
 }
 
@@ -1199,27 +1205,21 @@ process report {
   		guides(colour = guide_legend(override.aes = list(linewidth = 3)))
 
 	if (terminalReads == TRUE & location == "internal") {
-		print(terminalReads)
-		print(location)
 		strand.labs <- c("Strand: plus", "Strand: minus")
 		names(strand.labs) <- c("+", "-")
 		term_aln <- readGAlignments("$term_aln", use.names = TRUE)
-		print("term align in")
 		ggterm <- autoplot(term_aln, xlab="Reference genome position",
 			geom = "rect", aes(fill = strand, colour = strand), show.legend = FALSE) +
  			facet_grid(strand ~ ., labeller = labeller(strand = strand.labs)) +
   			theme_calc() + 
 			geom_vline(xintercept=plus_term, linetype="dashed", colour="springgreen3", linewidth=1) + 
   			geom_vline(xintercept=minus_term, linetype="dashed", colour="violet", linewidth=1)
-		print("figure made")
 		png("ggterm.png", width = 6, height = 8, units = "in", res = 300)
 		print(ggterm)
 		dev.off()
 	}
 
 	if (terminalReads == TRUE & location == "terminal") {
-		print(terminalReads)
-		print(location)
 		term_aln <- readGAlignments("$term_aln_circ3", use.names = TRUE)
 		strand.labs <- c("Strand: plus", "Strand: minus")
 		names(strand.labs) <- c("+", "-")
@@ -1245,8 +1245,13 @@ process report {
 		body_add_par(value = paste("Sequencing platform: ", "$params.seqplat", sep = ""), style = "Normal") %>%
 		body_add_par(value = paste("Number of sequence reads: ", totalReads, sep = ""), style = "Normal") %>%
 		body_add_par(value = paste("Number of reads mapped: ", mappedReads, " (", percentMapped, "%)", sep = ""), style = "Normal") %>%
-		body_add_par(value = paste("Number of reads not mapped: ", unmappedReads, " (", percentUnmapped, "%)", sep = ""), style = "Normal") %>%
-		body_add_par(value = paste("Average read length: ", aveReadLen, sep = ""), style = "Normal") %>%
+		body_add_par(value = paste("Number of reads not mapped: ", unmappedReads, " (", percentUnmapped, "%)", sep = ""), style = "Normal")
+		
+	if (percentUnmapped > 25){
+		report <- body_add_par(report, "WARNING: More than 25% of reads are unmapped to the reference.", style = "Normal")
+	}
+		
+	report <- body_add_par(report, value = paste("Average read length: ", aveReadLen, sep = ""), style = "Normal") %>%
 		body_add_par(value = paste("Maximum read length: ", maxReadLen, sep = ""), style = "Normal") %>%
 		body_add_par(value = paste("Percentage of plus strand with no coverage: ", percent_uncov_f, "%", sep = ""), style = "Normal") %>%
 		body_add_par(value = paste("Percentage of minus strand with no coverage: ",  percent_uncov_r, "%", sep = ""), style = "Normal") %>%
@@ -1260,6 +1265,8 @@ process report {
 	} else {
 		if (location == "correct"){
 			report <- body_add_par(report, value = paste("The termini are predicted to be at ", plus_term, " and ", minus_term, ", which are the ends of the reference genome.  This indicates that the reference genome is correct and that this phage genome does not have terminal repeats, which would shift one of the predicted termini.", sep = "")) 
+		} else if (location == "multiple") {
+			report <- body_add_par(report, "Multiple positions have tau values above 0.1, but none are above 0.35.  No prediction can be made about phage genome termini.")
 		} else {
 			report <- body_add_par(report, value = paste("The predicted termini are ", location, " within the reference genome.", sep = ""), style = "Normal") %>%
 			body_add_par(value = paste("Plus terminus: ", plus_term, sep = ""), style = "Normal") %>%
@@ -1269,6 +1276,7 @@ process report {
 			body_add_par(value = paste("Subclass: ", subclass, sep = ""), style = "Normal")
 		}
 		report <- body_add_par(report, "", style = "Normal") %>%
+			body_add_par("Table 1. Top five tau values for each strand of the reference genome.", style = "Normal") %>%
 			body_add_table(table, style = "table_template", first_column = TRUE) %>%
 			body_add_par("", style = "Normal") %>%
 			body_add_break(pos = "after") %>%
