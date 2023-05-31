@@ -758,13 +758,20 @@ process classify {
 
 	len <- $genLen
 
-	print(len)
-
 	tau_stats <- read.csv("$tau_stats")
 	tau_stats <- subset(tau_stats, select=-X)
+	
+	tau <- read.csv("$tau")
+	tau <- subset(tau, select=-X)
 
 	tau_circ3 <- read.csv("$tau_circ3")
 	tau_circ3 <- subset(tau_circ3, select=-X)
+
+	uncov_f <- sum(tau\$cov == 0 & tau\$strand == "f")
+	uncov_r <- sum(tau\$cov == 0 & tau\$strand == "r")
+
+	percent_uncov_f <- (uncov_f / len) * 100
+	percent_uncov_r <- (uncov_r / len) * 100
 
 	top_sig_plus <- tau_stats %>%
   	filter(strand == "f" & avg_tau >= 0.1) %>%
@@ -931,7 +938,8 @@ process classify {
                              plus_term, plus_term_tau,
                              minus_term, minus_term_tau,
                              location, subclass, class, term_dist,
-							 plus_term_circ3, minus_term_circ3)
+							 plus_term_circ3, minus_term_circ3, 
+							 percent_uncov_f, percent_uncov_r)
 
 	write.csv(classification, "classification.csv")
 	"""
@@ -1144,36 +1152,6 @@ process report {
             group_by(pos) %>%
             summarise(covs = sum(cov))
 
-	if (terminalReads == TRUE & location == "internal") {
-		strand.labs <- c("Strand: plus", "Strand: minus")
-		names(strand.labs) <- c("+", "-")
-		term_aln <- readGAlignments("$term_aln", use.names = TRUE)
-		ggterm <- autoplot(term_aln, xlab="Reference genome position",
-			geom = "rect", aes(fill = strand, colour = strand), show.legend = FALSE) +
- 			facet_grid(strand ~ ., labeller = labeller(strand = strand.labs)) +
-  			theme_calc() + 
-			geom_vline(xintercept=plus_term, linetype="dashed", colour="springgreen3", linewidth=1) + 
-  			geom_vline(xintercept=minus_term, linetype="dashed", colour="violet", linewidth=1)
-		png("ggterm.png", width = 6, height = 8, units = "in", res = 300)
-		print(ggterm)
-		dev.off()
-	}
-
-	if (terminalReads == TRUE & location == "terminal") {
-		term_aln <- readGAlignments("$term_aln_circ3", use.names = TRUE)
-		strand.labs <- c("Strand: plus", "Strand: minus")
-		names(strand.labs) <- c("+", "-")
-		ggterm <-autoplot(term_aln, xlab="Reference genome position",
-			geom = "rect", aes(fill = strand, colour = strand), show.legend = FALSE) +
- 			facet_grid(strand ~ ., labeller = labeller(strand = strand.labs)) +
-  			theme_calc() + 
-			geom_vline(xintercept=plus_term_circ3, linetype="dashed", colour="springgreen3", linewidth=1) + 
-  			geom_vline(xintercept=minus_term_circ3, linetype="dashed", colour="violet", linewidth=1)
-		png("ggterm.png", width = 6, height = 8, units = "in", res = 300)
-		print(ggterm)
-		dev.off()
-	}
-
 	ggtau <- ggplot(tau_stats) +
 		theme_calc() + 
 		geom_point(data=subset(tau_stats, strand == "f"), aes(x=pos_adj, y=avg_tau, colour="plus")) +
@@ -1239,14 +1217,7 @@ process report {
 		body_add_gg(value = ggdepth, style = "centered", height = 3.25) %>%
 		body_add_par(value = "Figure 2. The total read depth of the sequencing run, graphed as a rolling average with a window size equal to 1% of the reference genome length.") %>%
  		body_add_par("", style = "Normal")
-	if (terminalReads == TRUE & location == "internal"){
-		report <- body_add_img(report, src = "ggterm.png", style = "centered", width = 6, height = 8) %>%
-		body_add_par(value = "Figure 3. Reads that cover part or all of the region between the predicted termini.")
-	}
-	if (terminalReads == TRUE & location == "terminal"){
-		report <- body_add_img(report, src = "ggterm.png", style = "centered", width = 6, height = 8) %>%
-		body_add_par(value = "Figure 3. Reads that cover part or all of the region between the predicted termini.  Due to the terminal nature of the predicted termini, the read are mapped against the third circular permutation of the reference genome.")
-	}
+
 	print(report, target = "./report.docx")
 	"""
 }
