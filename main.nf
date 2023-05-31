@@ -1217,10 +1217,16 @@ process report {
 		body_add_par("Phage prediction", style = "heading 2")
 
 	if (percent_uncov_f > 10 | percent_uncov_r > 10) {
-
+		report <- body_add_par(report, "More than 10% of the genome has no read coverage.  Therefore, this dataset is not suitable for predicting the genome termini.", style = "Normal") %>%
+		body_add_gg(value = ggdepth, style = "centered", height = 3.25) %>%
+		body_add_par(value = "Figure 1. The total read depth of the sequencing run, graphed as a rolling average with a window size equal to 1% of the reference genome length.", style = "Normal") %>%
+ 		body_add_par("", style = "Normal")
 	} else {
 		if (location == "correct"){
 			report <- body_add_par(report, value = paste("The termini are predicted to be at ", plus_term, " and ", minus_term, ", which are the ends of the reference genome.  This indicates that the reference genome is correct and that this phage genome does not have terminal repeats, which would shift one of the predicted termini.", sep = ""))
+			body_add_gg(value = ggdepth, style = "centered", height = 3.25) %>%
+			body_add_par(value = "Figure 1. The total read depth of the sequencing run, graphed as a rolling average with a window size equal to 1% of the reference genome length.") %>%
+ 			body_add_par("", style = "Normal")
 		} else {
 			report <- body_add_par(report, value = paste("The predicted termini are ", location, " within the reference genome.", sep = ""), style = "Normal") %>%
 			body_add_par(value = paste("Plus terminus: ", plus_term, sep = ""), style = "Normal") %>%
