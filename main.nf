@@ -725,6 +725,8 @@ process tau {
 
 // This process classifies the phage based on the termini, distance, etc
 process classify {
+	publishDir "${params.out_dir}", mode: 'copy', overwrite: true
+	
 	input:
 		val genLen
 		path tau
@@ -820,18 +822,23 @@ process classify {
   		}
 	}
 
-	if (peaks == "two") {
-  		if (plus_term <= 5 | minus_term >= (len - 5) | minus_term <= 5 | plus_term >= (len - 5)){
-  			location = "terminal"
+	if (peaks == "two"){
+		if (plus_term == 1 & minus_term == len) {
+			location = "correct"
 			subclass = "NA"
 			term_dist = "NA"
 			class = "NA"
-  		} else if (plus_term > 5 & minus_term < (len - 5)) {
-  			location = "internal"
-  		}
+		} else if (plus_term <= 5 | minus_term >= (len - 5) | minus_term <= 5 | plus_term >= (len - 5)){
+ 				location = "terminal"
+			subclass = "NA"
+			term_dist = "NA"
+			class = "NA"
+ 		} else if (plus_term > 5 & minus_term < (len - 5)) {
+ 			location = "internal"
+ 		}
 	}
 
-		if (peaks == "one") {
+	if (peaks == "one") {
   		if (is.na(plus_term)){
     		if (plus_term <= 5 | minus_term >= (len - 5) | minus_term <= 5 | plus_term >= (len - 5)) {
      			location = "terminal"
@@ -1128,6 +1135,8 @@ process report {
 	term_dist <- classification[1,12]
 	plus_term_circ3 <- classification[1,13]
 	minus_term_circ3 <- classification[1,14]
+	percent_uncov_f <- format(classification[1,15], digits=3)
+	percent_uncov_r <- format(classification[1,16], digits=3)
 	
 	top_5_plus <- tau_stats %>% 
   		filter(strand == "f") %>%
@@ -1197,14 +1206,21 @@ process report {
 		body_add_par(value = paste("Number of reads not mapped: ", unmappedReads, " (", percentUnmapped, "%)", sep = ""), style = "Normal") %>%
 		body_add_par(value = paste("Average read length: ", aveReadLen, sep = ""), style = "Normal") %>%
 		body_add_par(value = paste("Maximum read length: ", maxReadLen, sep = ""), style = "Normal") %>%
-		body_add_par("Phage prediction", style = "heading 2") %>%
-		body_add_par(value = paste("The predicted termini are ", location, " within the reference genome.", sep = ""), style = "Normal") %>%
+		body_add_par(value = paste("Percentage of plus strand with no coverage: ", percent_uncov_f, "%", sep = ""), style = "Normal") %>%
+		body_add_par(value = paste("Percentage of minus strand with no coverage: ",  percent_uncov_r, "%", sep = ""), style = "Normal") %>%
+		body_add_par("Phage prediction", style = "heading 2")
+	if (location == "correct"){
+		report <- body_add_par(report, value = paste("The termini are predicted to be at ", plus_term, " and ", minus_term, ", which are the ends of the reference genome.  This indicates that the reference genome is correct and that this phage genome does not have terminal repeats, which would shift one of the predicted termini.", sep = ""))
+	} else {
+		report <- body_add_par(report, value = paste("The predicted termini are ", location, " within the reference genome.", sep = ""), style = "Normal") %>%
 		body_add_par(value = paste("Plus terminus: ", plus_term, sep = ""), style = "Normal") %>%
 		body_add_par(value = paste("Minus terminus: ", minus_term, sep = ""), style = "Normal") %>%
 		body_add_par(value = paste("The distance between predicted termini is ", term_dist, " nucleotides.", sep = ""), style = "Normal") %>%
 		body_add_par(value = paste("Class: ", class, sep = ""), style = "Normal") %>%
-		body_add_par(value = paste("Subclass: ", subclass, sep = ""), style = "Normal") %>%
-		body_add_par("", style = "Normal") %>%
+		body_add_par(value = paste("Subclass: ", subclass, sep = ""), style = "Normal")
+	}
+		
+	report <- body_add_par(report, "", style = "Normal") %>%
 		body_add_table(table, style = "table_template", first_column = TRUE) %>%
 		body_add_par("", style = "Normal") %>%
 		body_add_break(pos = "after") %>%
