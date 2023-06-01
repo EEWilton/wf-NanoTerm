@@ -857,7 +857,7 @@ process classify {
 	}
 
 	if (peaks == "none"){
-		location = NA
+		location = "none"
 		class = "headful without packaging site or Mu-like"
 		subclass = NA
 		term_dist = NA
@@ -1056,6 +1056,12 @@ process terminalReads {
 	fi
 
 	if [ $location == "multiple" ]
+	then
+		touch term_aln.bam
+		touch term_aln_circ3.bam
+	fi
+
+	if [ $location == "none" ]
 	then
 		touch term_aln.bam
 		touch term_aln_circ3.bam
