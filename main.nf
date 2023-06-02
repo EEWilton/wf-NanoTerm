@@ -871,7 +871,10 @@ process classify {
 	}
 
 	if (peaks == "two" & location == "internal") {
-		term_dist <- abs(minus_term - plus_term)
+		term_dist_ext <- len - (abs(minus_term - plus_term))
+		term_dist_int <- abs(minus_term - plus_term)
+		dists <- c(term_dist_ext, term_dist_int)
+		term_dist <- min(dists)
   		if (term_dist <= 20) {
     		class = "COS"
     		if (plus_term < minus_term) {
@@ -1125,8 +1128,8 @@ process report {
 	unmappedReads <- as.integer("$unmappedReads")
 	aveReadLen <- as.integer("$aveReadLen")
 	maxReadLen <- as.integer("$maxReadLen")
-	percentMapped <- format(((mappedReads / totalReads) * 100), digits=3)
-	percentUnmapped <- format(((unmappedReads / totalReads) * 100), digits=3)
+	percentMapped <- ((mappedReads / totalReads) * 100)
+	percentUnmapped <- ((unmappedReads / totalReads) * 100)
 
 	tau <- read.csv("$tau")
 	tau <- subset(tau, select=-X)
@@ -1153,8 +1156,8 @@ process report {
 	term_dist <- classification[1,12]
 	plus_term_circ3 <- classification[1,13]
 	minus_term_circ3 <- classification[1,14]
-	percent_uncov_f <- format(classification[1,15], digits=3)
-	percent_uncov_r <- format(classification[1,16], digits=3)
+	percent_uncov_f <- classification[1,15]
+	percent_uncov_r <- classification[1,16]
 	
 	top_5_plus <- tau_stats %>% 
   		filter(strand == "f") %>%
@@ -1197,9 +1200,7 @@ process report {
 		scale_y_continuous(limits=c(0,1))
 
 	ggdepth <- ggplot() +
- 		geom_vline(xintercept=plus_term, linetype="dashed", colour="springgreen3", linewidth=1) +
-  		geom_vline(xintercept=minus_term, linetype="dashed", colour="violet", linewidth=1) +
-  		geom_line(data=sum_cov, aes(colour="both", x=pos, y=rollmean(covs, window, na.pad = TRUE, align = "right"))) +
+ 		geom_line(data=sum_cov, aes(colour="both", x=pos, y=rollmean(covs, window, na.pad = TRUE, align = "right"))) +
   		geom_line(data=subset(tau, strand == "f"), aes(colour="plus", x=pos, y=rollmean(cov, window, na.pad = TRUE, align = "right"))) +
   		geom_line(data=subset(tau, strand == "r"), aes(colour="minus", x=pos, y=rollmean(cov, window, na.pad = TRUE, align = "right"))) +
   		theme_calc() +
@@ -1209,6 +1210,12 @@ process report {
   		scale_color_manual(values = colours) +
   		scale_x_continuous(labels = comma) +
   		guides(colour = guide_legend(override.aes = list(linewidth = 3)))
+
+	if (peaks == "two") {
+		ggdepth <- ggdepth + 
+			geom_vline(xintercept=plus_term, linetype="dashed", colour="springgreen3", linewidth=1) +
+  			geom_vline(xintercept=minus_term, linetype="dashed", colour="violet", linewidth=1)	
+	}
 
 	if (terminalReads == TRUE & location == "internal") {
 		strand.labs <- c("Strand: plus", "Strand: minus")
@@ -1250,11 +1257,17 @@ process report {
 		body_add_par("Alignment details", style = "heading 2") %>%
 		body_add_par(value = paste("Sequencing platform: ", "$params.seqplat", sep = ""), style = "Normal") %>%
 		body_add_par(value = paste("Number of sequence reads: ", totalReads, sep = ""), style = "Normal") %>%
-		body_add_par(value = paste("Number of reads mapped: ", mappedReads, " (", percentMapped, "%)", sep = ""), style = "Normal") %>%
-		body_add_par(value = paste("Number of reads not mapped: ", unmappedReads, " (", percentUnmapped, "%)", sep = ""), style = "Normal")
-		
-	if (percentUnmapped > 25){
+		body_add_par(value = paste("Number of reads mapped: ", mappedReads, " (", format(percentMapped, digits=3), "%)", sep = ""), style = "Normal") %>%
+		body_add_par(value = paste("Number of reads not mapped: ", unmappedReads, " (", format(percentUnmapped, digits=3), "%)", sep = ""), style = "Normal")
+
+	print(percentUnmapped)
+
+	if (percentUnmapped > 25) {
+		print("yes")
 		report <- body_add_par(report, "WARNING: More than 25% of reads are unmapped to the reference.", style = "Normal")
+	} else {
+		report <- report
+		print("no")
 	}
 		
 	report <- body_add_par(report, value = paste("Average read length: ", aveReadLen, sep = ""), style = "Normal") %>%
