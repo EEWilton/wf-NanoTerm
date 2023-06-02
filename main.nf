@@ -840,14 +840,14 @@ process classify {
 
 	if (peaks == "one") {
   		if (is.na(plus_term)){
-    		if (plus_term <= 5 | minus_term >= (len - 5) | minus_term <= 5 | plus_term >= (len - 5)) {
+    		if (minus_term >= (len - 5) | minus_term <= 5 ) {
      			location = "terminal"
 				subclass = "NA"
     		} else {
       			location = "internal"
     		}
   		} else if (is.na(minus_term)) {
-    		if (plus_term <= 5 | minus_term >= (len - 5) | minus_term <= 5 | plus_term >= (len - 5)) {
+    		if (plus_term <= 5 | plus_term >= (len - 5)) {
       			location = "terminal"
 				subclass = "NA"
     		} else {
@@ -1217,7 +1217,7 @@ process report {
   			geom_vline(xintercept=minus_term, linetype="dashed", colour="violet", linewidth=1)	
 	}
 
-	if (terminalReads == TRUE & location == "internal") {
+	if (terminalReads == TRUE & location == "internal" & peaks == "two") {
 		strand.labs <- c("Strand: plus", "Strand: minus")
 		names(strand.labs) <- c("+", "-")
 		term_aln <- readGAlignments("$term_aln", use.names = TRUE)
@@ -1232,7 +1232,7 @@ process report {
 		dev.off()
 	}
 
-	if (terminalReads == TRUE & location == "terminal") {
+	if (terminalReads == TRUE & location == "terminal" & peaks == "two") {
 		term_aln <- readGAlignments("$term_aln_circ3", use.names = TRUE)
 		strand.labs <- c("Strand: plus", "Strand: minus")
 		names(strand.labs) <- c("+", "-")
@@ -1310,11 +1310,11 @@ process report {
  			body_add_par("", style = "Normal")
 	}
 
-	if (terminalReads == TRUE & location == "internal"){
+	if (terminalReads == TRUE & location == "internal" & peaks == "two"){
 		report <- body_add_img(report, src = "ggterm.png", style = "centered", width = 6, height = 8) %>%
 		body_add_par(value = "Figure 3. Reads that cover part or all of the region between the predicted termini.")
 	}
-	if (terminalReads == TRUE & location == "terminal"){
+	if (terminalReads == TRUE & location == "terminal" & peaks == "two"){
 		report <- body_add_img(report, src = "ggterm.png", style = "centered", width = 6, height = 8) %>%
 		body_add_par(value = "Figure 3. Reads that cover part or all of the region between the predicted termini.  Due to the terminal nature of the predicted termini, the read are mapped against the third circular permutation of the reference genome.")
 	}
