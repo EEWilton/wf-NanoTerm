@@ -1272,8 +1272,8 @@ process report {
 		
 	report <- body_add_par(report, value = paste("Average read length: ", aveReadLen, sep = ""), style = "Normal") %>%
 		body_add_par(value = paste("Maximum read length: ", maxReadLen, sep = ""), style = "Normal") %>%
-		body_add_par(value = paste("Percentage of plus strand with no coverage: ", percent_uncov_f, "%", sep = ""), style = "Normal") %>%
-		body_add_par(value = paste("Percentage of minus strand with no coverage: ",  percent_uncov_r, "%", sep = ""), style = "Normal") %>%
+		body_add_par(value = paste("Percentage of plus strand with no coverage: ", format(percent_uncov_f, digits=3), "%", sep = ""), style = "Normal") %>%
+		body_add_par(value = paste("Percentage of minus strand with no coverage: ",  format(percent_uncov_r, digits=3), "%", sep = ""), style = "Normal") %>%
 		body_add_par("Phage prediction", style = "heading 2")
 
 	if (percent_uncov_f > 10 | percent_uncov_r > 10) {
