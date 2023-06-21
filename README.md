@@ -1,9 +1,12 @@
 # wf-NanoTerm
 
-NanoTerm is a NextFlow workflow inspired by the tool PhageTerm (Garneau et al, 2017, Scientific Reports).
-It is designed to identify the termini of a phage genome based on long-read sequencing results (i.e. Oxford Nanopore).
+NanoTerm is a NextFlow workflow inspired by the tool PhageTerm (Garneau et al, 2017, Scientific Reports).  It is designed to identify the termini of a phage genome based on long-read sequencing results (i.e. Oxford Nanopore).
 
-This workflow uses a set of bioinformatics tools that are all included in the docker image 'wiltone/nanoterm:1.0'.  Alignment of the sequence reads to the reference is done with minimap2.  
+This workflow uses a set of bioinformatics tools that are all included in the docker image 'wiltone/nanoterm:1.0'.  
+
+Alignment of the sequence reads to the reference is done with minimap2.
+The samtools package is used to determine total read depth.
+The calculations, logical deductions, and final report generation were all done in R.
 
 Required parameters:
 1. --fastq <folder containing processed sequence reads as fastq files>
