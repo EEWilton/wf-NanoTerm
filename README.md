@@ -6,6 +6,12 @@ Specicially, this workflow calculates a value 'tau'. which reflects the percenta
 
 This workflow uses a set of bioinformatics tools that are all included in the docker image 'wiltone/nanoterm:1.0'.  Alignment of the sequence reads to the reference is done with minimap2.  The samtools package is used to determine total read depth.  The calculations, logical deductions, and final report generation were all done in R.  Some data processing was done with Python.
 
+# Usage:
+
+This workflow can be imported to Epi2Me Labs (Oxford Nanopore Techonology) and executed in the Epi2Me Labs GUI.  It can also be run from the command line.
+
+nextflow run /path/to/main.nf --fastq /path/to/fastq/dir --reference /path/to/reference/fasta
+
 Required parameters:
 1. --fastq [folder containing processed sequence reads as fastq files]
 2. --reference [fasta file of the reference genome]
@@ -14,12 +20,6 @@ Optional parameters:
 1. --out_dir [diretory to save output files]
 2. --seqplat [sequencing platform] (default is nanopore, alternative is illumina)
 3. --name [name of the phage to be used in the final report] (default is my_phage)
-
-# Usage:
-
-This workflow can be imported to Epi2Me Labs (Oxford Nanopore Techonology) and executed in the Epi2Me Labs GUI.  It can also be run from the command line.
-
-nextflow run /path/to/main.nf --fastq /path/to/fastq/dir --reference /path/to/reference/fasta
 
 This document last updated on June 21, 2023.
 
