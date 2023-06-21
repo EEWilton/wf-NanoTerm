@@ -6,7 +6,7 @@ Specicially, this workflow calculates a value 'tau', which reflects the percenta
 
 This workflow uses a set of bioinformatics tools that are all included in the docker image 'wiltone/nanoterm:1.0'.  Alignment of the sequence reads to the reference is done with minimap2.  The samtools package is used to determine total read depth.  The calculations, logical deductions, and final report generation were all done in R.  Some data processing was done with Python.
 
-# Usage:
+### Usage:
 
 This workflow can be imported to Epi2Me Labs (Oxford Nanopore Techonology) and executed in the Epi2Me Labs GUI.  It can also be run from the command line.
 
