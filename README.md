@@ -13,7 +13,10 @@ Required parameters:
 Optional parameters:
 1. --out_dir [diretory to save output files]
 2. --seqplat [sequencing platform] (default is nanopore, alternative is illumina)
-3. --name [name of the phage to be used in the final report]
+3. --name [name of the phage to be used in the final report] (default is my_phage)
+
+Usage:
+nextflow run /path/to/main.nf --fastq /path/to/fastq/dir --reference /path/to/reference/fasta --name Phage1234
 
 This document last updated on June 21, 2023.
 
