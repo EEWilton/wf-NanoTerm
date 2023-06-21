@@ -1,8 +1,8 @@
 # wf-NanoTerm
 
-NanoTerm is a NextFlow workflow inspired by the tool PhageTerm (Garneau et al, 2017, Scientific Reports).  It is designed to identify the termini of a phage genome based on long-read sequencing results (i.e. Oxford Nanopore).
+NanoTerm is a NextFlow workflow designed to identify the termini of a phage genome based on long-read sequencing results (i.e. Oxford Nanopore).
 
-Specicially, this workflow calculates a value 'tau', which reflects the percentage of read depth at any position that correspond to the first nucleotide of a sequence read.  For example, if a genome position has a read depth of 10 and 5 of those reads start at that position, then the tau value will be 0.5.  A tau value closer to 1 means that most sequence reads that cover the position will start at that position.  Calculating tau allows for the detection of the physical ends of the sequenced DNA/RNA.
+Inspired by the tool PhageTerm (Garneau et al, 2017, Scientific Reports), NanoTerm calculates a value 'tau', which reflects the percentage of read depth at any position that correspond to the first nucleotide of a sequence read.  For example, if a genome position has a read depth of 10 and 5 of those reads start at that position, then the tau value will be 0.5.  A tau value closer to 1 means that most sequence reads that cover the position will start at that position.  Calculating tau allows for the detection of the physical ends of the sequenced DNA/RNA.
 
 This workflow uses a set of bioinformatics tools that are all included in the docker image 'wiltone/nanoterm:1.0'.  Alignment of the sequence reads to the reference is done with minimap2.  The samtools package is used to determine total read depth.  The calculations, logic, and final report generation all use in R.  Some data processing was done with Python.
 
