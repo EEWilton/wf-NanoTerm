@@ -17,6 +17,8 @@ Optional parameters:
 
 Usage:
 
+This workflow can be imported to Epi2Me Labs (Oxford Nanopore Techonology) and executed in the Epi2Me Labs GUI.  It can also be run from the command line.
+
 nextflow run /path/to/main.nf --fastq /path/to/fastq/dir --reference /path/to/reference/fasta
 
 This document last updated on June 21, 2023.
