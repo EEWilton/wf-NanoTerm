@@ -15,7 +15,7 @@ Optional parameters:
 2. --seqplat [sequencing platform] (default is nanopore, alternative is illumina)
 3. --name [name of the phage to be used in the final report] (default is my_phage)
 
-Usage:
+# Usage:
 
 This workflow can be imported to Epi2Me Labs (Oxford Nanopore Techonology) and executed in the Epi2Me Labs GUI.  It can also be run from the command line.
 
