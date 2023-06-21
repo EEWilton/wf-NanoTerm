@@ -4,9 +4,7 @@ NanoTerm is a NextFlow workflow inspired by the tool PhageTerm (Garneau et al, 2
 
 This workflow uses a set of bioinformatics tools that are all included in the docker image 'wiltone/nanoterm:1.0'.  
 
-Alignment of the sequence reads to the reference is done with minimap2.
-The samtools package is used to determine total read depth.
-The calculations, logical deductions, and final report generation were all done in R.
+Alignment of the sequence reads to the reference is done with minimap2.  The samtools package is used to determine total read depth.  The calculations, logical deductions, and final report generation were all done in R.
 
 Required parameters:
 1. --fastq <folder containing processed sequence reads as fastq files>
@@ -18,4 +16,5 @@ Optional parameters:
 3. --name <name of the phage to be used in the final report>
 
 This document last updated on June 21, 2023.
+
 Emily Wilton (M.Sc.) - Ph.D. student at University of Manitoba
