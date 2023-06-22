@@ -786,23 +786,23 @@ process classify {
 	num_sig_plus <- nrow(top_sig_plus)
 	num_sig_minus <- nrow(top_sig_minus)
 
-	if (num_sig_plus == 0){
+	if (num_sig_plus == 0){								# no significant peaks in tau on forward strand
   		plus_term = NA
   		plus_term_tau = NA
 	} else {
-  		plus_term <- as.integer(top_sig_plus[1,1])
+  		plus_term <- as.integer(top_sig_plus[1,1])		# if there are significant peaks, the terminus is the highest
   		plus_term_tau <- top_sig_plus[1,3]
 	}
 
-	if (num_sig_minus == 0){
+	if (num_sig_minus == 0){							# no significant peaks in tau on reverse strand		
  		minus_term = NA
  	 	minus_term_tau = NA
 	} else {
- 		minus_term <- as.integer(top_sig_minus[1,1])
+ 		minus_term <- as.integer(top_sig_minus[1,1])	# if there are significant peaks, the terminus is the highest
   		minus_term_tau <- top_sig_minus[1,3]
 	}
 
-	if (num_sig_plus > 1 | num_sig_minus > 1) {
+	if (num_sig_plus > 1 | num_sig_minus > 1) {			
  		 peaks = "multiple"
 	} else if (num_sig_plus == 1 & num_sig_minus == 1) {
   		peaks = "two"
