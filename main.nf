@@ -1304,6 +1304,7 @@ process report {
 		body_add_par(value = paste("Number of reads mapped: ", mappedReads, " (", format(percentMapped, digits=3), "%)", sep = ""), style = "Normal") %>%
 		body_add_par(value = paste("Number of reads not mapped: ", unmappedReads, " (", format(percentUnmapped, digits=3), "%)", sep = ""), style = "Normal")
 
+	# add a warning if there is more than 25% unmapped reads
 	if (percentUnmapped > 25) {
 		report <- body_add_par(report, "WARNING: More than 25% of reads are unmapped to the reference.", style = "Normal")
 	} else {
@@ -1316,6 +1317,12 @@ process report {
 		body_add_par(value = paste("Percentage of minus strand with no coverage: ",  format(percent_uncov_r, digits=3), "%", sep = ""), style = "Normal") %>%
 		body_add_par("Phage prediction", style = "heading 2")
 
+	# if there is part of reference genome that has no read coverage, 
+	# then it is not ideal for terminus prediction
+	# if the termini are predicted to be the first and last positions of the reference genome,
+	# then the reference genome is likely correct but has no terminal repeats
+	# if there are multiple tau positions, with none above 0.35, no further prediction can be made
+	# otherwise, for one or two peaks, report the predicted termini and phage classification
 	if (percent_uncov_f > 10 | percent_uncov_r > 10) {
 		report <- body_add_par(report, "More than 10% of the genome has no read coverage.  Therefore, this dataset is not suitable for predicting the genome termini.", style = "Normal") %>%
 		body_add_gg(value = ggdepth, style = "centered", height = 3.25) %>%
@@ -1334,6 +1341,8 @@ process report {
 			body_add_par(value = paste("Class: ", class, sep = ""), style = "Normal") %>%
 			body_add_par(value = paste("Subclass: ", subclass, sep = ""), style = "Normal")
 		}
+
+		# include table, tau and depth graphs into report
 		report <- body_add_par(report, "", style = "Normal") %>%
 			body_add_par("Table 1. Top five tau values for each strand of the reference genome.", style = "Normal") %>%
 			body_add_table(table, style = "table_template", first_column = TRUE) %>%
@@ -1350,6 +1359,7 @@ process report {
  			body_add_par("", style = "Normal")
 	}
 
+	# if there are two peaks, show a graph with the reads that cover/cross the termini
 	if (terminalReads == TRUE & location == "internal" & peaks == "two"){
 		report <- body_add_img(report, src = "ggterm.png", style = "centered", width = 6, height = 8) %>%
 		body_add_par(value = "Figure 3. Reads that cover part or all of the region between the predicted termini.")
