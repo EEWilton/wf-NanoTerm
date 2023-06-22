@@ -6,7 +6,8 @@ plat_ch = Channel.of(params.seqplat)
 name_ch = Channel.of(params.name)
 outdir_ch = Channel.of(params.out_dir)
 
-// This process concatenates all of the fastq.gz files in the fastq input directory into one file containing all sequences
+// This process concatenates all of the fastq.gz files in the fastq input directory
+// into one file containing all sequences
 process catFastq {
 	input:
 		path fastq
@@ -209,7 +210,8 @@ process alignStats {
 		"""
 }
 
-// This process seperates the alignment file by strand, to allow for easier analysis.  It also sorts the .bam files
+// This process seperates the alignment file by strand, to allow for easier analysis
+// It also sorts the .bam files
 process strandSep {
 	input:
 		path aln
@@ -273,7 +275,8 @@ process strandSep {
 		"""
 }
 
-// This process makes a bed file from each sorted bam file, to allow the extraction of starting position coverage
+// This process makes a bed file from each sorted bam file, 
+// to allow the extraction of starting position coverage
 process bed {
 	input:
 		path aln_f_sorted
@@ -973,103 +976,103 @@ process terminalReads {
 		path 'term_aln_circ3.bam'
 		env terminalReads
 		
-	shell:
-	'''
-	location="$(cat !{classification} | tr -d '"' | awk -F "," '$1 == "1" {print $10}')"
-	peaks="$(cat !{classification} | tr -d '"' | awk -F "," '$1 == "1" {print $5}')"
-	plus_term="$(cat !{classification} | tr -d '"' | awk -F "," '$1 == "1" {print $6}')"
-	minus_term="$(cat !{classification} | tr -d '"' | awk -F "," '$1 == "1" {print $8}')"
-	plus_term_circ3="$(cat !{classification} | tr -d '"' | awk -F "," '$1 == "1" {print $14}')"
-	minus_term_circ3="$(cat !{classification} | tr -d '"' | awk -F "," '$1 == "1" {print $15}')"
+	script:
+	"""
+	location="\$(cat $classification | tr -d '"' | awk -F "," '\$1 == "1" {print \$10}')"
+	peaks="\$(cat $classification | tr -d '"' | awk -F "," '\$1 == "1" {print \$5}')"
+	plus_term="\$(cat $classification | tr -d '"' | awk -F "," '\$1 == "1" {print \$6}')"
+	minus_term="\$(cat $classification | tr -d '"' | awk -F "," '\$1 == "1" {print \$8}')"
+	plus_term_circ3="\$(cat $classification | tr -d '"' | awk -F "," '\$1 == "1" {print \$14}')"
+	minus_term_circ3="\$(cat $classification | tr -d '"' | awk -F "," '\$1 == "1" {print \$15}')"
 
 	region=NA
 	terminalReads=FALSE
-	if [ $location == "internal" ]
+	if [ \$location == "internal" ]
 	then
-		if [ $peaks == "two" ]
+		if [ \$peaks == "two" ]
 		then
 			terminalReads=TRUE
-			if [ $plus_term -lt $minus_term ]
+			if [ \$plus_term -lt \$minus_term ]
 			then
-				region="$(echo input_reference:$plus_term-$minus_term)"
-			elif [ $plus_term -gt $minus_term ]
+				region="\$(echo input_reference:\$plus_term-\$minus_term)"
+			elif [ \$plus_term -gt \$minus_term ]
 			then
-				region="$(echo input_reference:$minus_term-$plus_term)"
+				region="\$(echo input_reference:\$minus_term-\$plus_term)"
 			fi
 		fi
-		if [ $peaks == "one" ]
+		if [ \$peaks == "one" ]
 		then
 			terminalReads=TRUE
 			if [ plus_term == NA ]
 			then
-				region="$(echo input_reference:($minus_term - 10)-($minus_term + 10))"
+				region="\$(echo input_reference:(\$minus_term - 10)-(\$minus_term + 10))"
 			elif [ minus_term == NA ]
 			then
-				region="$(echo input_reference:($plus_term - 10)-($plus_term + 10))"
+				region="\$(echo input_reference:(\$plus_term - 10)-(\$plus_term + 10))"
 			fi
 		fi
-		samtools view -b !{aln} > aln.bam
+		samtools view -b $aln > aln.bam
 		samtools sort aln.bam > aln_sorted.bam
 		samtools index aln_sorted.bam
-		samtools view -b aln_sorted.bam \"$region\" > term_aln.bam
+		samtools view -b aln_sorted.bam \"\$region\" > term_aln.bam
 		touch term_aln_circ3.bam
 	fi
 
-	if [ $location == "terminal" ]
+	if [ \$location == "terminal" ]
 	then
-		if [ $peaks == "two" ]
+		if [ \$peaks == "two" ]
 		then
 			terminalReads=TRUE
-			if [ $plus_term_circ3 -lt $minus_term_circ3 ]
+			if [ \$plus_term_circ3 -lt \$minus_term_circ3 ]
 			then
-				region="$(echo circular_permutation_3:$plus_term_circ3-$minus_term_circ3)"
-			elif [ $plus_term_circ3 -gt $minus_term_circ3 ]
+				region="\$(echo circular_permutation_3:\$plus_term_circ3-\$minus_term_circ3)"
+			elif [ \$plus_term_circ3 -gt \$minus_term_circ3 ]
 			then
-				region="$(echo circular_permutation_3:$minus_term_circ3-$plus_term_circ3)"
+				region="\$(echo circular_permutation_3:\$minus_term_circ3-\$plus_term_circ3)"
 			fi
 		fi
-		if [ $peaks == "one" ]
+		if [ \$peaks == "one" ]
 		then
 			terminalReads=TRUE
-			if [ $plus_term_circ3 == NA ]
+			if [ \$plus_term_circ3 == NA ]
 			then
-				region="$(echo circular_permutation_3:($minus_term_circ3 - 10)-($minus_term_circ3 + 10))"
-			elif [ $minus_term_circ3 == NA ]
+				region="\$(echo circular_permutation_3:(\$minus_term_circ3 - 10)-(\$minus_term_circ3 + 10))"
+			elif [ \$minus_term_circ3 == NA ]
 			then
-				region="$(echo circular_permutation_3:($plus_term_circ3 - 10)-($plus_term_circ3 + 10))"
+				region="\$(echo circular_permutation_3:(\$plus_term_circ3 - 10)-(\$plus_term_circ3 + 10))"
 			fi
 		fi
-		samtools view -b !{aln_circ3} > aln_circ3.bam
+		samtools view -b $aln_circ3 > aln_circ3.bam
 		samtools sort aln_circ3.bam > aln_circ3_sorted.bam
 		samtools index aln_circ3_sorted.bam
-		samtools view -b aln_circ3_sorted.bam \"$region\" > term_aln_circ3.bam
+		samtools view -b aln_circ3_sorted.bam \"\$region\" > term_aln_circ3.bam
 		touch term_aln.bam
 	fi
 
-	if [ $location == "internal" ]
+	if [ \$location == "internal" ]
 	then
 		touch term_aln.bam
 		touch term_aln_circ3.bam
 	fi
 
-	if [ $location == "correct" ]
+	if [ \$location == "correct" ]
 	then
 		touch term_aln.bam
 		touch term_aln_circ3.bam
 	fi
 
-	if [ $location == "multiple" ]
+	if [ \$location == "multiple" ]
 	then
 		touch term_aln.bam
 		touch term_aln_circ3.bam
 	fi
 
-	if [ $location == "none" ]
+	if [ \$location == "none" ]
 	then
 		touch term_aln.bam
 		touch term_aln_circ3.bam
 	fi
-	'''
+	"""
 }
 
 // This process outputs a .docx report on the findings
