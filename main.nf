@@ -1334,7 +1334,7 @@ process report {
 		} else if (location == "multiple") {
 			report <- body_add_par(report, "Multiple positions have tau values above 0.1, but none are above 0.35.  No prediction can be made about phage genome termini.")
 		} else if (location == "none") {
-			report <- body_add_par(report, "No positions have tau values above 0.1.  No prediction can be made about phage genome termini.")
+			report <- body_add_par(report, "No positions have tau values above 0.1.  This indicates that the phage genome might use a headful packaging mechanism without a specific packaging site, or it might be a Mu-like phage.  If there is a large pecentage of reads that do not align to the phage reference genome, then it may be due to phage-host chimeric sequence reads from a Mu-like phage.")
 		} else {
 			report <- body_add_par(report, value = paste("The predicted termini are ", location, " within the reference genome.", sep = ""), style = "Normal") %>%
 			body_add_par(value = paste("Plus terminus: ", plus_term, sep = ""), style = "Normal") %>%
