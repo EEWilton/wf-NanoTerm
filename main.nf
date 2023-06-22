@@ -789,23 +789,29 @@ process classify {
 	num_sig_plus <- nrow(top_sig_plus)
 	num_sig_minus <- nrow(top_sig_minus)
 
-	if (num_sig_plus == 0){								# no significant peaks in tau on forward strand
+	# if no significant peaks in tau on forward strand, set values to NA
+	# if there are significant peaks, the forward terminus is the position with the highest tau value
+	if (num_sig_plus == 0){	
   		plus_term = NA
   		plus_term_tau = NA
 	} else {
-  		plus_term <- as.integer(top_sig_plus[1,1])		# if there are significant peaks, the terminus is the highest
+  		plus_term <- as.integer(top_sig_plus[1,1])	
   		plus_term_tau <- top_sig_plus[1,3]
 	}
 
-	if (num_sig_minus == 0){							# no significant peaks in tau on reverse strand		
+	# if no significant peaks in tau on reverse strand, set values to NA
+	# if there are significant peaks, the reverse terminus is the position with the highest tau value
+	if (num_sig_minus == 0){
  		minus_term = NA
  	 	minus_term_tau = NA
 	} else {
- 		minus_term <- as.integer(top_sig_minus[1,1])	# if there are significant peaks, the terminus is the highest
+ 		minus_term <- as.integer(top_sig_minus[1,1])
   		minus_term_tau <- top_sig_minus[1,3]
 	}
 
-	if (num_sig_plus > 1 | num_sig_minus > 1) {			
+	# if more than 1 peak in tau, set to multiple; if only tau peak per strand, set to two peaks
+	# if only one strand has a peak, then one peak; otherwise no peaks
+	if (num_sig_plus > 1 | num_sig_minus > 1) {
  		 peaks = "multiple"
 	} else if (num_sig_plus == 1 & num_sig_minus == 1) {
   		peaks = "two"
@@ -817,15 +823,23 @@ process classify {
   		peaks = NA
 	}
 
-	if (peaks == "multiple"){
+	# if multiple peaks but none > 0.35, classed as multiple
+	# if plus and minus peaks > 0.35, then two peaks
+	if (peaks == "multiple"){							
   		if (plus_term_tau < 0.35 & minus_term_tau < 0.35) {
-    		peaks = "multiple"
+    		peaks = "multiple"			
   		} else {
     		peaks = "two"
   		}
 	}
 
-	if (peaks == "two"){
+	# if there are two peaks, one on each strand, 
+	# and the positions correspond to the first and last positions of the reference genome
+	# then the termini location is classified as correct
+	# if the termini are within 5 nucleotides of the first and last positions of the reference genome
+	# then the termini location is classified as terminal
+	# if the termini are within the reference genome, then the termini location is classified as internal
+	if (peaks == "two"){								
 		if (plus_term == 1 & minus_term == len) {
 			location = "correct"
 			subclass = "NA"
@@ -841,6 +855,7 @@ process classify {
  		}
 	}
 
+	#if there is a tau peak on one strand, then the location is classified as terminal or internal
 	if (peaks == "one") {
   		if (is.na(plus_term)){
     		if (minus_term >= (len - 5) | minus_term <= 5 ) {
