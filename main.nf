@@ -855,7 +855,7 @@ process classify {
  		}
 	}
 
-	#if there is a tau peak on one strand, then the location is classified as terminal or internal
+	# if there is a tau peak on one strand, then the location is classified as terminal or internal
 	if (peaks == "one") {
   		if (is.na(plus_term)){
     		if (minus_term >= (len - 5) | minus_term <= 5 ) {
@@ -888,6 +888,14 @@ process classify {
 		term_dist = NA
 	}
 
+	# if there are two tau peaks and they are internal to the reference genome
+	# the distance between the two predicted termini is measured
+	# if the distance between termini is < 20 nt, 
+	# then the phage genome is predicted to have cohesive ends
+	# the direction of the cohesive ends is determined by the strand with the larger tau value
+	# if the distance between termini is > 20 nt,
+	# then the phage genome is predicted to have direct terminal repeats
+	# if the distance is more than 1000 nt, then it is a long DTR; otherwise a short DTR
 	if (peaks == "two" & location == "internal") {
 		term_dist_ext <- len - (abs(minus_term - plus_term))
 		term_dist_int <- abs(minus_term - plus_term)
@@ -910,6 +918,7 @@ process classify {
 	    }
 	}
 
+	# this logic is the same as for two internal peals
 	if (peaks == "two" & location == "terminal") {
   		term_dist_ext <- len - (abs(minus_term - plus_term))
 		term_dist_int <- abs(minus_term - plus_term)
@@ -932,6 +941,8 @@ process classify {
     	}
 	}
 
+	# if there is only a tau peak on one strand, it is a headful-type phage with a packaging site
+	# the direction of the genome is determined by the strand which contains the tau peak
 	if (peaks == "one" & location == "internal") {
 		term_dist = NA
 		class = "pac"
@@ -942,6 +953,7 @@ process classify {
 		}
 	}
 
+	# this logic is the same as for one internal peak
 	if (peaks == "one" & location == "terminal") {
   		term_dist = NA
  		class = "pac"
@@ -952,6 +964,9 @@ process classify {
 		}
 	}
 
+	# the predicted termini from the third circular permutation are also extracted
+	# these can be used in the report generation process to visualization when the predicted
+	# termini are at the ends of the reference genome
 	plus_term_circ3 <- tau_circ3 %>%
 						filter(pos_adj == plus_term & strand == "f") %>%
 						select(pos)
