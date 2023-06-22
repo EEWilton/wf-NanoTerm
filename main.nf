@@ -989,6 +989,9 @@ process classify {
 }
 
 // This process outputs the reads that align with the terminal region
+// If the predicted termini are internal to the reference genome, then it uses the main alignment
+// If the predicted termini are terminal, it uses the alignment to the 3rd circular permutation
+// This results in a visualization where the reads around the termini are in the middle, not at the ends
 process terminalReads {
 	publishDir "${params.out_dir}", mode: 'copy', overwrite: true
 	
@@ -1175,6 +1178,7 @@ process report {
 	
 	terminalReads <- $terminalReads
 
+	# Values are extracted from the classification.csv and saved as variables for later use
 	len <- classification[1,1]
 	num_sig_plus <- classification[1,2]
 	num_sig_minus <- classification[1,3]
@@ -1192,6 +1196,7 @@ process report {
 	percent_uncov_f <- classification[1,15]
 	percent_uncov_r <- classification[1,16]
 	
+	# the top five highest tau values for each strand are extracted
 	top_5_plus <- tau_stats %>% 
   		filter(strand == "f") %>%
  		arrange(desc(avg_tau)) %>%
@@ -1202,6 +1207,7 @@ process report {
   		arrange(desc(avg_tau)) %>%
   		head(5)
 
+	# this table is generated with proper column names for the report
 	table <- rbind(top_5_plus, top_5_minus)
 	colnames(table) <- c('Position','Strand','Average Tau', 'Standard Deviation')
 	table[table=="f"] <- "plus"
@@ -1211,10 +1217,12 @@ process report {
 	colours <- c("plus" = "#1B9E77", "minus" = "#7570B3", "both" = "brown4")
 	window <- 0.01 * len
 
+	# sum of the read depth on both strands
 	sum_cov <- tau %>%
             group_by(pos) %>%
             summarise(covs = sum(cov))
 
+	# graph showing tau values across the reference genome
 	ggtau <- ggplot(tau_stats) +
 		theme_calc() + 
 		geom_point(data=subset(tau_stats, strand == "f"), aes(x=pos_adj, y=avg_tau, colour="plus")) +
@@ -1232,6 +1240,7 @@ process report {
 		scale_x_continuous(labels = comma) +
 		scale_y_continuous(limits=c(0,1))
 
+	# graph showing read depth values across the reference genome
 	ggdepth <- ggplot() +
  		geom_line(data=sum_cov, aes(colour="both", x=pos, y=rollmean(covs, window, na.pad = TRUE, align = "right"))) +
   		geom_line(data=subset(tau, strand == "f"), aes(colour="plus", x=pos, y=rollmean(cov, window, na.pad = TRUE, align = "right"))) +
@@ -1244,12 +1253,15 @@ process report {
   		scale_x_continuous(labels = comma) +
   		guides(colour = guide_legend(override.aes = list(linewidth = 3)))
 
+	# if there are two peaks, show both as dashed lines on the graph
 	if (peaks == "two") {
 		ggdepth <- ggdepth + 
 			geom_vline(xintercept=plus_term, linetype="dashed", colour="springgreen3", linewidth=1) +
   			geom_vline(xintercept=minus_term, linetype="dashed", colour="violet", linewidth=1)	
 	}
 
+	# if there are two peaks and two predicted termini, this graph will show the reads
+	# that cover some or all of the sequence between the termini
 	if (terminalReads == TRUE & location == "internal" & peaks == "two") {
 		strand.labs <- c("Strand: plus", "Strand: minus")
 		names(strand.labs) <- c("+", "-")
@@ -1264,7 +1276,6 @@ process report {
 		print(ggterm)
 		dev.off()
 	}
-
 	if (terminalReads == TRUE & location == "terminal" & peaks == "two") {
 		term_aln <- readGAlignments("$term_aln_circ3", use.names = TRUE)
 		strand.labs <- c("Strand: plus", "Strand: minus")
@@ -1293,14 +1304,10 @@ process report {
 		body_add_par(value = paste("Number of reads mapped: ", mappedReads, " (", format(percentMapped, digits=3), "%)", sep = ""), style = "Normal") %>%
 		body_add_par(value = paste("Number of reads not mapped: ", unmappedReads, " (", format(percentUnmapped, digits=3), "%)", sep = ""), style = "Normal")
 
-	print(percentUnmapped)
-
 	if (percentUnmapped > 25) {
-		print("yes")
 		report <- body_add_par(report, "WARNING: More than 25% of reads are unmapped to the reference.", style = "Normal")
 	} else {
 		report <- report
-		print("no")
 	}
 		
 	report <- body_add_par(report, value = paste("Average read length: ", aveReadLen, sep = ""), style = "Normal") %>%
