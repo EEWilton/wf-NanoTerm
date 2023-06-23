@@ -11,7 +11,7 @@ Due to the nature of mapping to a linear reference genome, the first and last po
 <br>
 <img src="https://github.com/EEWilton/wf-NanoTerm/blob/main/Images/end_artifacts.png" width=60%>
 <br>
-Figure 1. An example of tau values mapped across the reference genome, highlighting the artificially high tau values at the first and last positions, compared to the relevantg tau values in the middle indicating the true termini.
+Figure 1. An example of tau values mapped across the reference genome, highlighting the artificially high tau values at the first and last positions, compared to the relevant tau values in the middle indicating the true termini.
 <br>
 <br>
 <img src="https://github.com/EEWilton/wf-NanoTerm/blob/main/Images/permutations.png" width=80%>
