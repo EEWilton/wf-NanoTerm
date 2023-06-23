@@ -6,6 +6,11 @@ Inspired by the tool PhageTerm (Garneau et al, 2017, Scientific Reports), NanoTe
 
 Due to the nature of mapping to a linear reference genome, the first and last positions of the reference genome will have tau values of 1.0.  This is because it is not possible for a read to cover position 1 without also starting at position 1.  To combat this technical artifact, NanoTerm produces five circular permutations of the reference genome, against which the sequence reads are mapped.  By averaging the tau values across the six replicates, these high tau value artifacts are reduced.
 
+
+Figure 1. An example of tau values mapped across the reference genome, highlighting the artificially high tau values at the first and last positions, compared to the relevantg tau values in the middle indicating the true termini.
+
+Figure 2.  An illustration of the five circular permutations of the reference genome compared to the original, with the star indicating the real terminus position that we are looking for.
+
 This workflow uses a set of bioinformatics tools that are all included in the docker image 'wiltone/nanoterm:1.0'.  Alignment of the sequence reads to the reference is done with minimap2.  The samtools package is used to determine total read depth.  The calculations, logic, and final report generation all use in R.  Some data processing was done with Python.
 
 ### Usage:
