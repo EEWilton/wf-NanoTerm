@@ -17,7 +17,7 @@ Required parameters:
 2. --reference [fasta file of the reference genome]
 
 Optional parameters:
-1. --out_dir [diretory to save output files]
+1. --out_dir [directory to save output files]
 2. --seqplat [sequencing platform] (default is nanopore, alternative is illumina)
 3. --name [name of the phage to be used in the final report] (default is my_phage)
 
