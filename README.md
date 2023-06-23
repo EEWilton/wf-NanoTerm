@@ -2,7 +2,9 @@
 
 NanoTerm is a NextFlow workflow designed to identify the termini of a phage genome based on long-read sequencing results (i.e. Oxford Nanopore).
 
-Inspired by the tool PhageTerm (Garneau et al, 2017, Scientific Reports), NanoTerm calculates a value 'tau', which reflects the percentage of read depth at any position that correspond to the first nucleotide of a sequence read.  For example, if a genome position has a read depth of 10 and 5 of those reads start at that position, then the tau value will be 0.5.  A tau value closer to 1 means that most sequence reads that cover the position will start at that position.  Calculating tau allows for the detection of the physical ends of the sequenced DNA/RNA.
+Inspired by the tool PhageTerm (Garneau et al, 2017, Scientific Reports), NanoTerm calculates a value 'tau', which reflects the percentage of read depth at any position that correspond to the first nucleotide of a sequence read.  A tau value of 1.0 at a specific genome position means that every sequence read covering that position also starts at that position.  A tau value of 0 means that no sequence reads start at that position.  Calculating tau allows for the detection of the physical ends of the sequenced DNA/RNA.
+
+Due to the nature of mapping to a linear reference genome, the first and last positions of the refernce genome will have tau values of 1.0.  This is because it is not possible for a read to cover position 1 without also starting at position 1.  To combat this technical artifact, NanoTerm produces five circular permutations of the reference genome, against which the sequence reads are mapped.  By averaging the tau values across the six replicates, these high tau value artifacts are reduced.
 
 This workflow uses a set of bioinformatics tools that are all included in the docker image 'wiltone/nanoterm:1.0'.  Alignment of the sequence reads to the reference is done with minimap2.  The samtools package is used to determine total read depth.  The calculations, logic, and final report generation all use in R.  Some data processing was done with Python.
 
