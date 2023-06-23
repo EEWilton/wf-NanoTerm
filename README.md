@@ -1,5 +1,7 @@
 # wf-NanoTerm
 
+### Background:
+
 NanoTerm is a NextFlow workflow designed to identify the termini of a phage genome based on long-read sequencing results (i.e. Oxford Nanopore).
 <br>
 <br>
