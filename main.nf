@@ -162,6 +162,16 @@ process mapping {
 			minimap2 -ax map-ont $circular_permutation5 $all > aln_circ5.sam
 			"""
 		
+		else if( seqplat == 'pacbio' )
+			"""
+			minimap2 -ax map-pb $refseq $all > aln.sam
+			minimap2 -ax map-pb $circular_permutation1 $all > aln_circ1.sam
+			minimap2 -ax map-pb $circular_permutation2 $all > aln_circ2.sam
+			minimap2 -ax map-pb $circular_permutation3 $all > aln_circ3.sam
+			minimap2 -ax map-pb $circular_permutation4 $all > aln_circ4.sam
+			minimap2 -ax map-pb $circular_permutation5 $all > aln_circ5.sam
+			"""
+
 		else if( seqplat == 'illumina' )
 			"""
 			minimap2 -ax sr $refseq $all > aln.sam
