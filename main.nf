@@ -129,6 +129,53 @@ process dnaDiff {
 	"""
 }
 
+process truncateRepeat {
+	input:
+	path refseq
+	path repeats
+	path repeats
+	path repeats
+	path repeats
+	path repeats
+	path repeats
+	path repeats
+	path repeats
+	path repeats
+	val repeatAlign
+	val repeatLength
+
+	output:
+	path 'repeat_removed.fasta'
+	path 'only_repeat.fasta'
+
+	script:
+	"""
+	#!/usr/bin/env python3
+	
+	f = open('refseq.fasta', 'r')
+	next(f)
+	for line in f:
+    	refseq = str(line.rstrip())
+	f.close()
+
+	DTR = $repeatLength
+	L = len(refseq)
+
+	oneDTR = refseq[0:(L-DTR)]
+	onlyDTR = refseq[(L-DTR):L]
+
+	sourceFile = open('repeat_removed.fasta', 'w')
+	print('>reference_repeat_removed', file = sourceFile)
+	print(oneDTR, file = sourceFile)
+	sourceFile.close()
+
+	sourceFile = open('only_repeat.fasta', 'w')
+	print('>reference_only_repeat', file = sourceFile)
+	print(onlyDTR, file = sourceFile)
+	sourceFile.close()
+	"""
+}
+
 // This process produces 5 circular permutations of the reference genome
 process permute {
 	input:
@@ -1575,7 +1622,8 @@ workflow {
 	len_ch = refLen(raw_ch)
 	refseq_ch = refSeq(ref_ch)
 	split_ch = splitRef(refseq_ch)
-	dnaDiff(split_ch)
+	diff_ch = dnaDiff(split_ch)
+	truncateRepeat(refseq_ch, diff_ch)
 	circ_ch = permute(refseq_ch)
 	aln_ch = mapping(plat_ch, refseq_ch, allseq_ch, circ_ch)
 	alnstats_ch = alignStats(aln_ch, ref_ch)
