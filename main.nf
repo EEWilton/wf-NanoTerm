@@ -117,6 +117,8 @@ process dnaDiff {
 	path 'repeats.rdiff'
 	path 'repeats.snps'
 	path 'repeats.report'
+	env repeatAlign
+	env repeatLength
 
 	script:
 	"""
