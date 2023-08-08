@@ -65,6 +65,68 @@ process refSeq {
 	"""
 }
 
+process splitRef {
+	input:
+		path refseq
+		
+	output:
+		path 'refseq_front.fasta'
+		path 'refseq_back.fasta'
+	
+	script:
+	"""
+	#!/usr/bin/env python3
+
+	f = open('refseq.fasta', 'r')
+	next(f)
+	for line in f:
+		refseq = str(line.rstrip())
+	f.close()
+
+	L = len(refseq)
+	half = int(L/2)
+
+	front = refseq[0:half]
+	back = refseq[half:L]
+
+	sourceFile = open('refseq_front.fasta', 'w')
+	print('>reference_firsthalf', file = sourceFile)
+	print(front, file = sourceFile)
+	sourceFile.close()
+
+	sourceFile = open('refseq_back.fasta', 'w')
+	print('>reference_secondhalf', file = sourceFile)
+	print(back, file = sourceFile)
+	sourceFile.close()
+	"""
+}
+
+// This process looks for repeats at the ends of the reference genome
+process dnaDiff {
+	input: 
+	path refseq_front
+	path refseq_back
+	
+	output:
+	path 'repeats.1coords'
+	path 'repeats.mcoords'
+	path 'repeats.delta'	
+	path 'repeats.1delta'	
+	path 'repeats.mdelta'
+	path 'repeats.qdiff'	
+	path 'repeats.rdiff'
+	path 'repeats.snps'
+	path 'repeats.report'
+
+	script:
+	"""
+	dnadiff -p repeats $refseq_front $refseq_back
+	
+	repeatAlign=`grep "1-to-1" repeats.report  | awk '{ print \$2 }'`
+	repeatLength=`grep -m 1 "TotalLength" repeats.report  | awk '{ print \$2 }'`
+	"""
+}
+
 // This process produces 5 circular permutations of the reference genome
 process permute {
 	input:
@@ -1510,6 +1572,8 @@ workflow {
 	raw_ch = rawSeq(ref_ch)
 	len_ch = refLen(raw_ch)
 	refseq_ch = refSeq(ref_ch)
+	split_ch = splitRef(refseq_ch)
+	dnaDiff(split_ch)
 	circ_ch = permute(refseq_ch)
 	aln_ch = mapping(plat_ch, refseq_ch, allseq_ch, circ_ch)
 	alnstats_ch = alignStats(aln_ch, ref_ch)
