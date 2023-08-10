@@ -46,7 +46,7 @@
           "type": "string",
           "default": "nanopore",
           "description": "Sequencing platform",
-          "enum": ["nanopore", "illumina"]
+          "enum": ["nanopore", "illumina", "pacbio"]
         }
       },
       "required": ["name", "out_dir", "seqplat"]
