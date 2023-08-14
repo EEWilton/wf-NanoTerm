@@ -108,50 +108,47 @@ process dnaDiff {
 	path refseq_back
 	
 	output:
-	path 'repeats.1coords'
-	path 'repeats.mcoords'
-	path 'repeats.delta'	
-	path 'repeats.1delta'	
-	path 'repeats.mdelta'
-	path 'repeats.qdiff'	
-	path 'repeats.rdiff'
-	path 'repeats.snps'
-	path 'repeats.report'
 	env repeatAlign
 	env repeatLength
 
 	script:
 	"""
-	dnadiff -p repeats $refseq_front $refseq_back
+	nucmer -p repeats $refseq_front $refseq_back
+
+	SR=`grep -A 1 ">" repeats.delta | grep -v ">" | awk '{ print \$1}'`
+	ER=`grep -A 1 ">" repeats.delta | grep -v ">" | awk '{ print \$2}'`
+	SQ=`grep -A 1 ">" repeats.delta | grep -v ">" | awk '{ print \$3}'`
+	EQ=`grep -A 1 ">" repeats.delta | grep -v ">" | awk '{ print \$4}'`
 	
-	repeatAlign=`grep "1-to-1" repeats.report  | awk '{ print \$2 }'`
-	repeatLength=`grep -m 1 "TotalLength" repeats.report  | awk '{ print \$2 }'`
+	repR=\$((\$ER-\$SR+1))
+	repQ=\$((\$EQ-\$SQ+1))
+
+	if [[ \$repR -gt 0 ]]
+	then
+		repeatAlign=1
+	else
+		repeatAlign=0
+	fi
+
+	repeatLength=\$repR
 	"""
 }
 
 process truncateRepeat {
 	input:
 	path refseq
-	path repeats
-	path repeats
-	path repeats
-	path repeats
-	path repeats
-	path repeats
-	path repeats
-	path repeats
-	path repeats
 	val repeatAlign
 	val repeatLength
 
 	output:
+	path 'original.fasta'
 	path 'repeat_removed.fasta'
 	path 'only_repeat.fasta'
 
 	script:
 	"""
 	#!/usr/bin/env python3
-	
+
 	f = open('refseq.fasta', 'r')
 	next(f)
 	for line in f:
@@ -163,6 +160,11 @@ process truncateRepeat {
 
 	oneDTR = refseq[0:(L-DTR)]
 	onlyDTR = refseq[(L-DTR):L]
+
+	sourceFile = open('original.fasta', 'w')
+	print('>original_reference', file = sourceFile)
+	print(refseq, file = sourceFile)
+	sourceFile.close()
 
 	sourceFile = open('repeat_removed.fasta', 'w')
 	print('>reference_repeat_removed', file = sourceFile)
@@ -179,7 +181,11 @@ process truncateRepeat {
 // This process produces 5 circular permutations of the reference genome
 process permute {
 	input:
-		path refseq
+		val repeatAlign
+		val repeatLength
+		path original
+		path repeat_removed
+		path only_repeat
 		
 	output:
 		path 'circular_permutation1.fasta'
@@ -192,14 +198,24 @@ process permute {
 	"""
 	#!/usr/bin/env python3
 
-	f = open('refseq.fasta', 'r')
-	next(f)
-	for line in f:
-		refseq = str(line.rstrip())
-	f.close()
+	repAlign = $repeatAlign
+	repLen = $repeatLength
+
+	print(repAlign)
+
+	if repAlign == 0:
+		f = open('original.fasta', 'r')
+		next(f)
+		for line in f:
+			refseq = str(line.rstrip())
+	else:
+		f = open('repeat_removed.fasta', 'r')
+		next(f)
+		for line in f:
+			refseq = str(line.rstrip())
 
 	L = len(refseq)
-	br=int(L/6)
+	br = int(L/6)
 
 	break1 = br
 	break2 = br*2
@@ -212,6 +228,11 @@ process permute {
 	seq3 = refseq[break3:] + refseq[:break3]
 	seq4 = refseq[break4:] + refseq[:break4]
 	seq5 = refseq[break5:] + refseq[:break5]
+
+	sourceFile = open('no_permutation.fasta', 'w')
+	print('>no_permutation', file = sourceFile)
+	print(refseq, file = sourceFile)
+	sourceFile.close()
 
 	sourceFile = open('circular_permutation1.fasta', 'w')
 	print('>circular_permutation_1', file = sourceFile)
@@ -358,7 +379,7 @@ process strandSep {
 
 	script:
 		"""
-		samtools view -F 16 -b $aln > aln_f.bam
+		samtools view -q 1 -F 16 -b $aln > aln_f.bam
 		samtools sort aln_f.bam > aln_f_sorted.bam
 		
 		samtools view -f 16 -b $aln > aln_r.bam
@@ -1623,8 +1644,8 @@ workflow {
 	refseq_ch = refSeq(ref_ch)
 	split_ch = splitRef(refseq_ch)
 	diff_ch = dnaDiff(split_ch)
-	truncateRepeat(refseq_ch, diff_ch)
-	circ_ch = permute(refseq_ch)
+	trunc_ch = truncateRepeat(refseq_ch, diff_ch)
+	circ_ch = permute(diff_ch, trunc_ch)
 	aln_ch = mapping(plat_ch, refseq_ch, allseq_ch, circ_ch)
 	alnstats_ch = alignStats(aln_ch, ref_ch)
 	sep_ch = strandSep(aln_ch)
