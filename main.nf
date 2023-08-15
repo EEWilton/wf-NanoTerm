@@ -907,8 +907,8 @@ process classify {
 	# then the phage genome is predicted to have direct terminal repeats
 	# if the distance is more than 1000 nt, then it is a long DTR; otherwise a short DTR
 	if (peaks == "two" & location == "internal") {
-		term_dist_ext <- len - (abs(minus_term - plus_term))
-		term_dist_int <- abs(minus_term - plus_term)
+		term_dist_ext <- len - (abs(minus_term - (plus_term-1)))
+		term_dist_int <- abs(minus_term - (plus_term-1))
 		dists <- c(term_dist_ext, term_dist_int)
 		term_dist <- min(dists)
   		if (term_dist <= 20) {
