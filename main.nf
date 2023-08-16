@@ -188,6 +188,7 @@ process permute {
 		path only_repeat
 		
 	output:
+		path 'no_permutation.fasta'
 		path 'circular_permutation1.fasta'
 		path 'circular_permutation2.fasta'
 		path 'circular_permutation3.fasta'
@@ -269,8 +270,8 @@ process permute {
 process mapping {
 	input:
 		val seqplat
-		path refseq
 		path all
+		path no_permutation
 		path circular_permutation1
 		path circular_permutation2
 		path circular_permutation3
@@ -288,7 +289,7 @@ process mapping {
 	script:
 		if( seqplat == 'nanopore' )
 			"""
-			minimap2 -ax map-ont $refseq $all > aln.sam
+			minimap2 -ax map-ont $no_permutation $all > aln.sam
 			minimap2 -ax map-ont $circular_permutation1 $all > aln_circ1.sam
 			minimap2 -ax map-ont $circular_permutation2 $all > aln_circ2.sam
 			minimap2 -ax map-ont $circular_permutation3 $all > aln_circ3.sam
@@ -298,7 +299,7 @@ process mapping {
 		
 		else if( seqplat == 'pacbio' )
 			"""
-			minimap2 -ax map-pb $refseq $all > aln.sam
+			minimap2 -ax map-pb $no_permutation $all > aln.sam
 			minimap2 -ax map-pb $circular_permutation1 $all > aln_circ1.sam
 			minimap2 -ax map-pb $circular_permutation2 $all > aln_circ2.sam
 			minimap2 -ax map-pb $circular_permutation3 $all > aln_circ3.sam
@@ -308,7 +309,7 @@ process mapping {
 
 		else if( seqplat == 'illumina' )
 			"""
-			minimap2 -ax sr $refseq $all > aln.sam
+			minimap2 -ax sr $no_permutation $all > aln.sam
 			minimap2 -ax sr $circular_permutation1 $all > aln_circ1.sam
 			minimap2 -ax sr $circular_permutation2 $all > aln_circ2.sam
 			minimap2 -ax sr $circular_permutation3 $all > aln_circ3.sam
@@ -1546,7 +1547,7 @@ process fastaOut {
 
 	input:
 		path classification
-		path refseq
+		path no_permutation
 		path circular_permutation1
 		path circular_permutation2
 		path circular_permutation3
@@ -1572,7 +1573,7 @@ process fastaOut {
 		minus_term_circ3 = df.iat[0,14]
 
 		if location == "internal" and type == "DTR":
-			f = open('refseq.fasta', 'r')
+			f = open('no_permutation.fasta', 'r')
 			next(f)
 			for line in f:
 				refseq = str(line.rstrip())
@@ -1652,7 +1653,7 @@ workflow {
 	diff_ch = dnaDiff(split_ch)
 	trunc_ch = truncateRepeat(refseq_ch, diff_ch)
 	circ_ch = permute(diff_ch, trunc_ch)
-	aln_ch = mapping(plat_ch, refseq_ch, allseq_ch, circ_ch)
+	aln_ch = mapping(plat_ch, allseq_ch, circ_ch)
 	alnstats_ch = alignStats(aln_ch, ref_ch)
 	sep_ch = strandSep(aln_ch)
 	bed_ch = bed(sep_ch)
@@ -1662,5 +1663,5 @@ workflow {
 	termreads_ch = terminalReads(aln_ch, class_ch)
 	report_ch = report(ref_ch, name_ch, plat_ch, alnstats_ch, class_ch, tau_ch, termreads_ch)
 	doc2pdf(report_ch)
-	fastaOut(refseq_ch, class_ch, circ_ch)
+	fastaOut(class_ch, circ_ch)
 }
