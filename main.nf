@@ -1039,8 +1039,8 @@ process classify {
 	# then the phage genome is predicted to have direct terminal repeats
 	# if the distance is more than 1000 nt, then it is a long DTR; otherwise a short DTR
 	if (peaks == "two" & location == "internal") {
-		term_dist_ext <- len - (abs(minus_term - plus_term))
-		term_dist_int <- abs(minus_term - plus_term)
+		term_dist_ext <- len - (abs(minus_term - (plus_term-1)))
+		term_dist_int <- abs(minus_term - (plus_term-1))
 		dists <- c(term_dist_ext, term_dist_int)
 		term_dist <- min(dists)
   		if (term_dist <= 20) {
@@ -1062,8 +1062,8 @@ process classify {
 
 	# this logic is the same as for two internal peals
 	if (peaks == "two" & location == "terminal") {
-  		term_dist_ext <- len - (abs(minus_term - plus_term))
-		term_dist_int <- abs(minus_term - plus_term)
+  		term_dist_ext <- len - (abs(minus_term - (plus_term-1)))
+		term_dist_int <- abs(minus_term - (plus_term-1))
 		dists <- c(term_dist_ext, term_dist_int)
 		term_dist <- min(dists)
  		if (term_dist <= 20) {
@@ -1572,14 +1572,14 @@ process fastaOut {
 				refseq = str(line.rstrip())
 			f.close()
 
-			newseq = refseq[plus_term:] + refseq[:minus_term]
+			newseq = refseq[(plus_term-1):] + refseq[:minus_term]
 
 			sourceFile = open('rearranged_genome.fasta', 'w')
 			print('>rearranged_reference_genome', file = sourceFile)
 			print(newseq, file = sourceFile)
 			sourceFile.close()
 		
-			DTRseq = refseq[plus_term:minus_term]
+			DTRseq = refseq[(plus_term-1):minus_term]
 
 			sourceFile = open('DTR_sequence.fasta', 'w')
 			print('>DTR_sequence', file = sourceFile)
@@ -1593,14 +1593,14 @@ process fastaOut {
 				refseq = str(line.rstrip())
 			f.close()
 
-			newseq = refseq[plus_term_circ3:] + refseq[:minus_term_circ3]
+			newseq = refseq[(plus_term_circ3-1):] + refseq[:minus_term_circ3]
 
 			sourceFile = open('rearranged_genome.fasta', 'w')
 			print('>rearranged_reference_genome', file = sourceFile)
 			print(newseq, file = sourceFile)
 			sourceFile.close()
 						
-			DTRseq = refseq[plus_term_circ3:minus_term_circ3]
+			DTRseq = refseq[(plus_term_circ3-1):minus_term_circ3]
 
 			sourceFile = open('DTR_sequence.fasta', 'w')
 			print('>DTR_sequence', file = sourceFile)
@@ -1614,7 +1614,7 @@ process fastaOut {
 				refseq = str(line.rstrip())
 			f.close()
 
-			newseq = refseq[plus_term:] + refseq[:minus_term]
+			newseq = refseq[(plus_term-1):] + refseq[:minus_term]
 
 			sourceFile = open('rearranged_genome.fasta', 'w')
 			print('>rearranged_reference_genome', file = sourceFile)
@@ -1628,7 +1628,7 @@ process fastaOut {
 				refseq = str(line.rstrip())
 			f.close()
 
-			newseq = refseq[plus_term_circ3:] + refseq[:minus_term_circ3]
+			newseq = refseq[(plus_term_circ3-1):] + refseq[:minus_term_circ3]
 
 			sourceFile = open('rearranged_genome.fasta', 'w')
 			print('>rearranged_reference_genome', file = sourceFile)
