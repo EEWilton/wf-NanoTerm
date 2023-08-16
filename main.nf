@@ -965,6 +965,10 @@ process classify {
   		peaks = NA
 	}
 
+	print(peaks)
+	print(plus_term_tau)
+	print(minus_term_tau)
+
 	# if multiple peaks but none > 0.35, classed as multiple
 	# if plus and minus peaks > 0.35, then two peaks
 	if (peaks == "multiple"){							
