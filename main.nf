@@ -217,6 +217,8 @@ process permute {
 	L = len(refseq)
 	br = int(L/6)
 
+	print(L)
+
 	break1 = br
 	break2 = br*2
 	break3 = br*3
