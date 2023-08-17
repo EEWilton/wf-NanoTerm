@@ -65,17 +65,13 @@ process refSeq {
 	"""
 }
 
-// This process produces 5 circular permutations of the reference genome
-process permute {
+process splitRef {
 	input:
 		path refseq
 		
 	output:
-		path 'circular_permutation1.fasta'
-		path 'circular_permutation2.fasta'
-		path 'circular_permutation3.fasta'
-		path 'circular_permutation4.fasta'
-		path 'circular_permutation5.fasta'
+		path 'refseq_front.fasta'
+		path 'refseq_back.fasta'
 	
 	script:
 	"""
@@ -88,7 +84,141 @@ process permute {
 	f.close()
 
 	L = len(refseq)
-	br=int(L/6)
+	half = int(L/2)
+
+	front = refseq[0:half]
+	back = refseq[half:L]
+
+	sourceFile = open('refseq_front.fasta', 'w')
+	print('>reference_firsthalf', file = sourceFile)
+	print(front, file = sourceFile)
+	sourceFile.close()
+
+	sourceFile = open('refseq_back.fasta', 'w')
+	print('>reference_secondhalf', file = sourceFile)
+	print(back, file = sourceFile)
+	sourceFile.close()
+	"""
+}
+
+// This process looks for repeats at the ends of the reference genome
+process dnaDiff {
+	input: 
+	path refseq_front
+	path refseq_back
+	
+	output:
+	env repeatAlign
+	env repeatLength
+
+	script:
+	"""
+	nucmer -p repeats $refseq_front $refseq_back
+
+	SR=`grep -A 1 ">" repeats.delta | grep -v ">" | awk '{ print \$1}'`
+	ER=`grep -A 1 ">" repeats.delta | grep -v ">" | awk '{ print \$2}'`
+	SQ=`grep -A 1 ">" repeats.delta | grep -v ">" | awk '{ print \$3}'`
+	EQ=`grep -A 1 ">" repeats.delta | grep -v ">" | awk '{ print \$4}'`
+	
+	repR=\$((\$ER-\$SR+1))
+	repQ=\$((\$EQ-\$SQ+1))
+
+	if [[ \$repR -gt 0 ]]
+	then
+		repeatAlign=1
+	else
+		repeatAlign=0
+	fi
+
+	repeatLength=\$repR
+	"""
+}
+
+process truncateRepeat {
+	input:
+	path refseq
+	val repeatAlign
+	val repeatLength
+
+	output:
+	path 'original.fasta'
+	path 'repeat_removed.fasta'
+	path 'only_repeat.fasta'
+
+	script:
+	"""
+	#!/usr/bin/env python3
+
+	f = open('refseq.fasta', 'r')
+	next(f)
+	for line in f:
+    	refseq = str(line.rstrip())
+	f.close()
+
+	DTR = $repeatLength
+	L = len(refseq)
+
+	oneDTR = refseq[0:(L-DTR)]
+	onlyDTR = refseq[(L-DTR):L]
+
+	sourceFile = open('original.fasta', 'w')
+	print('>original_reference', file = sourceFile)
+	print(refseq, file = sourceFile)
+	sourceFile.close()
+
+	sourceFile = open('repeat_removed.fasta', 'w')
+	print('>reference_repeat_removed', file = sourceFile)
+	print(oneDTR, file = sourceFile)
+	sourceFile.close()
+
+	sourceFile = open('only_repeat.fasta', 'w')
+	print('>reference_only_repeat', file = sourceFile)
+	print(onlyDTR, file = sourceFile)
+	sourceFile.close()
+	"""
+}
+
+// This process produces 5 circular permutations of the reference genome
+process permute {
+	input:
+		val repeatAlign
+		val repeatLength
+		path original
+		path repeat_removed
+		path only_repeat
+		
+	output:
+		path 'no_permutation.fasta'
+		path 'circular_permutation1.fasta'
+		path 'circular_permutation2.fasta'
+		path 'circular_permutation3.fasta'
+		path 'circular_permutation4.fasta'
+		path 'circular_permutation5.fasta'
+	
+	script:
+	"""
+	#!/usr/bin/env python3
+
+	repAlign = $repeatAlign
+	repLen = $repeatLength
+
+	print(repAlign)
+
+	if repAlign == 0:
+		f = open('original.fasta', 'r')
+		next(f)
+		for line in f:
+			refseq = str(line.rstrip())
+	else:
+		f = open('repeat_removed.fasta', 'r')
+		next(f)
+		for line in f:
+			refseq = str(line.rstrip())
+
+	L = len(refseq)
+	br = int(L/6)
+
+	print(L)
 
 	break1 = br
 	break2 = br*2
@@ -101,6 +231,11 @@ process permute {
 	seq3 = refseq[break3:] + refseq[:break3]
 	seq4 = refseq[break4:] + refseq[:break4]
 	seq5 = refseq[break5:] + refseq[:break5]
+
+	sourceFile = open('no_permutation.fasta', 'w')
+	print('>no_permutation', file = sourceFile)
+	print(refseq, file = sourceFile)
+	sourceFile.close()
 
 	sourceFile = open('circular_permutation1.fasta', 'w')
 	print('>circular_permutation_1', file = sourceFile)
@@ -135,8 +270,8 @@ process permute {
 process mapping {
 	input:
 		val seqplat
-		path refseq
 		path all
+		path no_permutation
 		path circular_permutation1
 		path circular_permutation2
 		path circular_permutation3
@@ -154,7 +289,7 @@ process mapping {
 	script:
 		if( seqplat == 'nanopore' )
 			"""
-			minimap2 -ax map-ont $refseq $all > aln.sam
+			minimap2 -ax map-ont $no_permutation $all > aln.sam
 			minimap2 -ax map-ont $circular_permutation1 $all > aln_circ1.sam
 			minimap2 -ax map-ont $circular_permutation2 $all > aln_circ2.sam
 			minimap2 -ax map-ont $circular_permutation3 $all > aln_circ3.sam
@@ -164,7 +299,7 @@ process mapping {
 		
 		else if( seqplat == 'pacbio' )
 			"""
-			minimap2 -ax map-pb $refseq $all > aln.sam
+			minimap2 -ax map-pb $no_permutation $all > aln.sam
 			minimap2 -ax map-pb $circular_permutation1 $all > aln_circ1.sam
 			minimap2 -ax map-pb $circular_permutation2 $all > aln_circ2.sam
 			minimap2 -ax map-pb $circular_permutation3 $all > aln_circ3.sam
@@ -174,7 +309,7 @@ process mapping {
 
 		else if( seqplat == 'illumina' )
 			"""
-			minimap2 -ax sr $refseq $all > aln.sam
+			minimap2 -ax sr $no_permutation $all > aln.sam
 			minimap2 -ax sr $circular_permutation1 $all > aln_circ1.sam
 			minimap2 -ax sr $circular_permutation2 $all > aln_circ2.sam
 			minimap2 -ax sr $circular_permutation3 $all > aln_circ3.sam
@@ -247,7 +382,7 @@ process strandSep {
 
 	script:
 		"""
-		samtools view -F 16 -b $aln > aln_f.bam
+		samtools view -q 1 -F 16 -b $aln > aln_f.bam
 		samtools sort aln_f.bam > aln_f_sorted.bam
 		
 		samtools view -f 16 -b $aln > aln_r.bam
@@ -395,7 +530,6 @@ process tau {
 	publishDir "${params.out_dir}", mode: 'copy', overwrite: true
 	
 	input:
-		val genLen
 		path aln_f
 		path aln_r
 		path aln_f_circ1
@@ -438,16 +572,6 @@ process tau {
 	
 	library("tidyverse")
 	library("dplyr")
-
-	len <- $genLen
-
-	break1 <- as.integer(len / 6)
-	break2 <- break1 * 2
-	break3 <- break1 * 3
-	break4 <- break1 * 4
-	break5 <- break1 * 5
-		
-	pos <- seq(from = 1,to = len, by = 1)
 
 	f_bed <- read.table("$aln_f", quote="\\"", comment.char="",
                     colClasses=c("character","numeric","numeric","NULL","NULL","NULL"))
@@ -569,7 +693,19 @@ process tau {
                     colClasses=c("character","numeric","numeric"))
 	r_cov_circ5 <- setNames(r_cov_circ5, c("chr","pos","cov"))
 	r_cov_circ5\$strand <- "r"	
+
+
+	len <- max(f_cov\$pos)
+
+	print(len)
+
+	break1 <- as.integer(len / 6)
+	break2 <- break1 * 2
+	break3 <- break1 * 3
+	break4 <- break1 * 4
+	break5 <- break1 * 5
 		
+	pos <- seq(from = 1,to = len, by = 1)
 	
 	f_spc <- data.frame(pos = pos, SPC = 0)
 	r_spc <- data.frame(pos = pos, SPC = 0)
@@ -741,7 +877,6 @@ process classify {
 	publishDir "${params.out_dir}", mode: 'copy', overwrite: true
 	
 	input:
-		val genLen
 		path tau
 		path tau_circ1
 		path tau_circ2
@@ -771,13 +906,15 @@ process classify {
 	library("tidyverse")
 	library("dplyr")
 
-	len <- $genLen
-
 	tau_stats <- read.csv("$tau_stats")
 	tau_stats <- subset(tau_stats, select=-X)
 	
 	tau <- read.csv("$tau")
 	tau <- subset(tau, select=-X)
+
+	len <- max(tau\$pos)
+
+	print(len)
 
 	tau_circ3 <- read.csv("$tau_circ3")
 	tau_circ3 <- subset(tau_circ3, select=-X)
@@ -832,6 +969,10 @@ process classify {
 	} else {
   		peaks = NA
 	}
+
+	print(peaks)
+	print(plus_term_tau)
+	print(minus_term_tau)
 
 	# if multiple peaks but none > 0.35, classed as multiple
 	# if plus and minus peaks > 0.35, then two peaks
@@ -1028,6 +1169,9 @@ process terminalReads {
 	plus_term_circ3="\$(cat $classification | tr -d '"' | awk -F "," '\$1 == "1" {print \$14}')"
 	minus_term_circ3="\$(cat $classification | tr -d '"' | awk -F "," '\$1 == "1" {print \$15}')"
 
+	echo \$peaks
+	echo \$location
+
 	region=NA
 	terminalReads=FALSE
 	if [ \$location == "internal" ]
@@ -1124,6 +1268,9 @@ process report {
 
 	input:
 		path reference
+		val genLen
+		val repeatAlign
+		val repeatLength
 		val name
 		val seqplat
 		val totalReads
@@ -1166,6 +1313,10 @@ process report {
 	library("GenomicRanges")
 	library("GenomicAlignments")
 	library("ggbio")
+
+	originalRefLen <- $genLen
+	repeatAlign <- $repeatAlign
+	repeatLength <- $repeatLength
 
 	date <- format(Sys.Date())
 	name <- as.character("$name")
@@ -1270,45 +1421,19 @@ process report {
   			geom_vline(xintercept=minus_term, linetype="dashed", colour="violet", linewidth=1)	
 	}
 
-	# if there are two peaks and two predicted termini, this graph will show the reads
-	# that cover some or all of the sequence between the termini
-	if (terminalReads == TRUE & location == "internal" & peaks == "two") {
-		strand.labs <- c("Strand: plus", "Strand: minus")
-		names(strand.labs) <- c("+", "-")
-		term_aln <- readGAlignments("$term_aln", use.names = TRUE)
-		ggterm <- autoplot(term_aln, xlab="Reference genome position",
-			geom = "rect", aes(fill = strand, colour = strand), show.legend = FALSE) +
- 			facet_grid(strand ~ ., labeller = labeller(strand = strand.labs)) +
-  			theme_calc() + 
-			geom_vline(xintercept=plus_term, linetype="dashed", colour="springgreen3", linewidth=1) + 
-  			geom_vline(xintercept=minus_term, linetype="dashed", colour="violet", linewidth=1)
-		png("ggterm.png", width = 6, height = 8, units = "in", res = 300)
-		print(ggterm)
-		dev.off()
-	}
-	if (terminalReads == TRUE & location == "terminal" & peaks == "two") {
-		term_aln <- readGAlignments("$term_aln_circ3", use.names = TRUE)
-		strand.labs <- c("Strand: plus", "Strand: minus")
-		names(strand.labs) <- c("+", "-")
-		ggterm <-autoplot(term_aln, xlab="Reference genome position",
-			geom = "rect", aes(fill = strand, colour = strand), show.legend = FALSE) +
- 			facet_grid(strand ~ ., labeller = labeller(strand = strand.labs)) +
-  			theme_calc() + 
-			geom_vline(xintercept=plus_term_circ3, linetype="dashed", colour="springgreen3", linewidth=1) + 
-  			geom_vline(xintercept=minus_term_circ3, linetype="dashed", colour="violet", linewidth=1)
-		png("ggterm.png", width = 6, height = 8, units = "in", res = 300)
-		print(ggterm)
-		dev.off()
-	}
-	
 	report <- read_docx() %>%
 		body_add_par(value = paste("NanoTerm Report: ", name), style = "heading 1") %>%
 		body_add_par("", style = "Normal") %>%
 		body_add_par("Run details", style = "heading 2") %>%
 		body_add_par(value = paste("Generated on: ", date, sep = ""), style = "Normal") %>%
 		body_add_par(value = paste("Reference genome: ", "$refName", sep = ""), style = "Normal") %>%
-		body_add_par(value = paste("Reference genome length: ", len, sep = ""), style = "Normal") %>%
-		body_add_par("Alignment details", style = "heading 2") %>%
+		body_add_par(value = paste("Original reference genome length: ", originalRefLen, sep = ""), style = "Normal")
+			if (originalRefLen != len) {
+				report <- body_add_par(report, value = paste("A repeated region of ", repeatLength, " was detected at the ends of the original reference genome and were removed before further analysis.", sep = ""), style = "Normal") %>%
+				body_add_par(value = paste("Processed reference genome length: ", len, sep = ""), style = "Normal")
+			}
+
+		report <- body_add_par(report, "Alignment details", style = "heading 2") %>%
 		body_add_par(value = paste("Sequencing platform: ", "$params.seqplat", sep = ""), style = "Normal") %>%
 		body_add_par(value = paste("Number of sequence reads: ", totalReads, sep = ""), style = "Normal") %>%
 		body_add_par(value = paste("Number of reads mapped: ", mappedReads, " (", format(percentMapped, digits=3), "%)", sep = ""), style = "Normal") %>%
@@ -1371,16 +1496,7 @@ process report {
  			body_add_par("", style = "Normal")
 	}
 
-	# if there are two peaks, show a graph with the reads that cover/cross the termini
-	if (terminalReads == TRUE & location == "internal" & peaks == "two"){
-		report <- body_add_img(report, src = "ggterm.png", style = "centered", width = 6, height = 8) %>%
-		body_add_par(value = "Figure 3. Reads that cover part or all of the region between the predicted termini.")
-	}
-	if (terminalReads == TRUE & location == "terminal" & peaks == "two"){
-		report <- body_add_img(report, src = "ggterm.png", style = "centered", width = 6, height = 8) %>%
-		body_add_par(value = "Figure 3. Reads that cover part or all of the region between the predicted termini.  Due to the terminal nature of the predicted termini, the read are mapped against the third circular permutation of the reference genome.")
-	}
-	
+
 	print(report, target = "./report.docx")
 	"""
 }
@@ -1408,7 +1524,7 @@ process fastaOut {
 
 	input:
 		path classification
-		path refseq
+		path no_permutation
 		path circular_permutation1
 		path circular_permutation2
 		path circular_permutation3
@@ -1434,7 +1550,7 @@ process fastaOut {
 		minus_term_circ3 = df.iat[0,14]
 
 		if location == "internal" and type == "DTR":
-			f = open('refseq.fasta', 'r')
+			f = open('no_permutation.fasta', 'r')
 			next(f)
 			for line in f:
 				refseq = str(line.rstrip())
@@ -1510,16 +1626,19 @@ workflow {
 	raw_ch = rawSeq(ref_ch)
 	len_ch = refLen(raw_ch)
 	refseq_ch = refSeq(ref_ch)
-	circ_ch = permute(refseq_ch)
-	aln_ch = mapping(plat_ch, refseq_ch, allseq_ch, circ_ch)
+	split_ch = splitRef(refseq_ch)
+	diff_ch = dnaDiff(split_ch)
+	trunc_ch = truncateRepeat(refseq_ch, diff_ch)
+	circ_ch = permute(diff_ch, trunc_ch)
+	aln_ch = mapping(plat_ch, allseq_ch, circ_ch)
 	alnstats_ch = alignStats(aln_ch, ref_ch)
 	sep_ch = strandSep(aln_ch)
 	bed_ch = bed(sep_ch)
 	cov_ch = cov(sep_ch)
-	tau_ch = tau(len_ch, bed_ch, cov_ch)
-	class_ch = classify(len_ch, tau_ch, name_ch, alnstats_ch, seq_ch, ref_ch, plat_ch)
+	tau_ch = tau(bed_ch, cov_ch)
+	class_ch = classify(tau_ch, name_ch, alnstats_ch, seq_ch, ref_ch, plat_ch)
 	termreads_ch = terminalReads(aln_ch, class_ch)
-	report_ch = report(ref_ch, name_ch, plat_ch, alnstats_ch, class_ch, tau_ch, termreads_ch)
+	report_ch = report(ref_ch, len_ch, diff_ch, name_ch, plat_ch, alnstats_ch, class_ch, tau_ch, termreads_ch)
 	doc2pdf(report_ch)
-	fastaOut(refseq_ch, class_ch, circ_ch)
+	fastaOut(class_ch, circ_ch)
 }
