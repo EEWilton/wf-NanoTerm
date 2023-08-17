@@ -530,7 +530,6 @@ process tau {
 	publishDir "${params.out_dir}", mode: 'copy', overwrite: true
 	
 	input:
-		val genLen
 		path aln_f
 		path aln_r
 		path aln_f_circ1
@@ -573,16 +572,6 @@ process tau {
 	
 	library("tidyverse")
 	library("dplyr")
-
-	len <- $genLen
-
-	break1 <- as.integer(len / 6)
-	break2 <- break1 * 2
-	break3 <- break1 * 3
-	break4 <- break1 * 4
-	break5 <- break1 * 5
-		
-	pos <- seq(from = 1,to = len, by = 1)
 
 	f_bed <- read.table("$aln_f", quote="\\"", comment.char="",
                     colClasses=c("character","numeric","numeric","NULL","NULL","NULL"))
@@ -704,7 +693,19 @@ process tau {
                     colClasses=c("character","numeric","numeric"))
 	r_cov_circ5 <- setNames(r_cov_circ5, c("chr","pos","cov"))
 	r_cov_circ5\$strand <- "r"	
+
+
+	len <- max(f_cov\$pos)
+
+	print(len)
+
+	break1 <- as.integer(len / 6)
+	break2 <- break1 * 2
+	break3 <- break1 * 3
+	break4 <- break1 * 4
+	break5 <- break1 * 5
 		
+	pos <- seq(from = 1,to = len, by = 1)
 	
 	f_spc <- data.frame(pos = pos, SPC = 0)
 	r_spc <- data.frame(pos = pos, SPC = 0)
@@ -876,7 +877,6 @@ process classify {
 	publishDir "${params.out_dir}", mode: 'copy', overwrite: true
 	
 	input:
-		val genLen
 		path tau
 		path tau_circ1
 		path tau_circ2
@@ -906,13 +906,15 @@ process classify {
 	library("tidyverse")
 	library("dplyr")
 
-	len <- $genLen
-
 	tau_stats <- read.csv("$tau_stats")
 	tau_stats <- subset(tau_stats, select=-X)
 	
 	tau <- read.csv("$tau")
 	tau <- subset(tau, select=-X)
+
+	len <- max(tau\$pos)
+
+	print(len)
 
 	tau_circ3 <- read.csv("$tau_circ3")
 	tau_circ3 <- subset(tau_circ3, select=-X)
@@ -1167,6 +1169,9 @@ process terminalReads {
 	plus_term_circ3="\$(cat $classification | tr -d '"' | awk -F "," '\$1 == "1" {print \$14}')"
 	minus_term_circ3="\$(cat $classification | tr -d '"' | awk -F "," '\$1 == "1" {print \$15}')"
 
+	echo \$peaks
+	echo \$location
+
 	region=NA
 	terminalReads=FALSE
 	if [ \$location == "internal" ]
@@ -1263,6 +1268,9 @@ process report {
 
 	input:
 		path reference
+		val genLen
+		val repeatAlign
+		val repeatLength
 		val name
 		val seqplat
 		val totalReads
@@ -1305,6 +1313,10 @@ process report {
 	library("GenomicRanges")
 	library("GenomicAlignments")
 	library("ggbio")
+
+	originalRefLen <- $genLen
+	repeatAlign <- $repeatAlign
+	repeatLength <- $repeatLength
 
 	date <- format(Sys.Date())
 	name <- as.character("$name")
@@ -1409,45 +1421,19 @@ process report {
   			geom_vline(xintercept=minus_term, linetype="dashed", colour="violet", linewidth=1)	
 	}
 
-	# if there are two peaks and two predicted termini, this graph will show the reads
-	# that cover some or all of the sequence between the termini
-	if (terminalReads == TRUE & location == "internal" & peaks == "two") {
-		strand.labs <- c("Strand: plus", "Strand: minus")
-		names(strand.labs) <- c("+", "-")
-		term_aln <- readGAlignments("$term_aln", use.names = TRUE)
-		ggterm <- autoplot(term_aln, xlab="Reference genome position",
-			geom = "rect", aes(fill = strand, colour = strand), show.legend = FALSE) +
- 			facet_grid(strand ~ ., labeller = labeller(strand = strand.labs)) +
-  			theme_calc() + 
-			geom_vline(xintercept=plus_term, linetype="dashed", colour="springgreen3", linewidth=1) + 
-  			geom_vline(xintercept=minus_term, linetype="dashed", colour="violet", linewidth=1)
-		png("ggterm.png", width = 6, height = 8, units = "in", res = 300)
-		print(ggterm)
-		dev.off()
-	}
-	if (terminalReads == TRUE & location == "terminal" & peaks == "two") {
-		term_aln <- readGAlignments("$term_aln_circ3", use.names = TRUE)
-		strand.labs <- c("Strand: plus", "Strand: minus")
-		names(strand.labs) <- c("+", "-")
-		ggterm <-autoplot(term_aln, xlab="Reference genome position",
-			geom = "rect", aes(fill = strand, colour = strand), show.legend = FALSE) +
- 			facet_grid(strand ~ ., labeller = labeller(strand = strand.labs)) +
-  			theme_calc() + 
-			geom_vline(xintercept=plus_term_circ3, linetype="dashed", colour="springgreen3", linewidth=1) + 
-  			geom_vline(xintercept=minus_term_circ3, linetype="dashed", colour="violet", linewidth=1)
-		png("ggterm.png", width = 6, height = 8, units = "in", res = 300)
-		print(ggterm)
-		dev.off()
-	}
-	
 	report <- read_docx() %>%
 		body_add_par(value = paste("NanoTerm Report: ", name), style = "heading 1") %>%
 		body_add_par("", style = "Normal") %>%
 		body_add_par("Run details", style = "heading 2") %>%
 		body_add_par(value = paste("Generated on: ", date, sep = ""), style = "Normal") %>%
 		body_add_par(value = paste("Reference genome: ", "$refName", sep = ""), style = "Normal") %>%
-		body_add_par(value = paste("Reference genome length: ", len, sep = ""), style = "Normal") %>%
-		body_add_par("Alignment details", style = "heading 2") %>%
+		body_add_par(value = paste("Original reference genome length: ", originalRefLen, sep = ""), style = "Normal")
+			if (originalRefLen != len) {
+				report <- body_add_par(report, value = paste("A repeated region of ", repeatLength, " was detected at the ends of the original reference genome and were removed before further analysis.", sep = ""), style = "Normal") %>%
+				body_add_par(value = paste("Processed reference genome length: ", len, sep = ""), style = "Normal")
+			}
+
+		report <- body_add_par(report, "Alignment details", style = "heading 2") %>%
 		body_add_par(value = paste("Sequencing platform: ", "$params.seqplat", sep = ""), style = "Normal") %>%
 		body_add_par(value = paste("Number of sequence reads: ", totalReads, sep = ""), style = "Normal") %>%
 		body_add_par(value = paste("Number of reads mapped: ", mappedReads, " (", format(percentMapped, digits=3), "%)", sep = ""), style = "Normal") %>%
@@ -1510,16 +1496,7 @@ process report {
  			body_add_par("", style = "Normal")
 	}
 
-	# if there are two peaks, show a graph with the reads that cover/cross the termini
-	if (terminalReads == TRUE & location == "internal" & peaks == "two"){
-		report <- body_add_img(report, src = "ggterm.png", style = "centered", width = 6, height = 8) %>%
-		body_add_par(value = "Figure 3. Reads that cover part or all of the region between the predicted termini.")
-	}
-	if (terminalReads == TRUE & location == "terminal" & peaks == "two"){
-		report <- body_add_img(report, src = "ggterm.png", style = "centered", width = 6, height = 8) %>%
-		body_add_par(value = "Figure 3. Reads that cover part or all of the region between the predicted termini.  Due to the terminal nature of the predicted termini, the read are mapped against the third circular permutation of the reference genome.")
-	}
-	
+
 	print(report, target = "./report.docx")
 	"""
 }
@@ -1658,10 +1635,10 @@ workflow {
 	sep_ch = strandSep(aln_ch)
 	bed_ch = bed(sep_ch)
 	cov_ch = cov(sep_ch)
-	tau_ch = tau(len_ch, bed_ch, cov_ch)
-	class_ch = classify(len_ch, tau_ch, name_ch, alnstats_ch, seq_ch, ref_ch, plat_ch)
+	tau_ch = tau(bed_ch, cov_ch)
+	class_ch = classify(tau_ch, name_ch, alnstats_ch, seq_ch, ref_ch, plat_ch)
 	termreads_ch = terminalReads(aln_ch, class_ch)
-	report_ch = report(ref_ch, name_ch, plat_ch, alnstats_ch, class_ch, tau_ch, termreads_ch)
+	report_ch = report(ref_ch, len_ch, diff_ch, name_ch, plat_ch, alnstats_ch, class_ch, tau_ch, termreads_ch)
 	doc2pdf(report_ch)
 	fastaOut(class_ch, circ_ch)
 }
