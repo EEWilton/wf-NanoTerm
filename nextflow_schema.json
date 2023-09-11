@@ -6,7 +6,7 @@
   "type": "object",
   "definitions": {
     "input": {
-      "title": "Input",
+      "title": "Input Options",
       "type": "object",
       "description": "",
       "default": "",
@@ -27,7 +27,7 @@
       "required": ["fastq", "reference"]
     },
     "output": {
-      "title": "Output",
+      "title": "Output Options",
       "type": "object",
       "description": "",
       "default": "",
