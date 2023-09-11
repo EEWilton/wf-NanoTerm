@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema",
   "$id": "https://raw.githubusercontent.com/wf-NanoTerm/master/nextflow_schema.json",
-  "title": "wf-NanoTerm pipeline parameters",
+  "title": "wf-NanoTerm",
   "description": "Determine phage termini from nanopore sequencing",
   "type": "object",
   "definitions": {
@@ -26,22 +26,31 @@
       },
       "required": ["fastq", "reference"]
     },
-    "additional_settings": {
-      "title": "Additional settings",
+    "output": {
+      "title": "Output",
       "type": "object",
       "description": "",
       "default": "",
       "properties": {
         "name": {
           "type": "string",
-          "default": "None",
+          "default": "my_phage",
           "description": "Phage name for report"
         },
         "out_dir": {
           "type": "string",
           "default": "output",
           "description": "Directory for output files"
-        },
+        }
+      },
+      "required": ["name", "out_dir"]
+    },
+    "additional_settings": {
+      "title": "Additional settings",
+      "type": "object",
+      "description": "",
+      "default": "",
+      "properties": {
         "seqplat": {
           "type": "string",
           "default": "nanopore",
@@ -49,12 +58,15 @@
           "enum": ["nanopore", "illumina", "pacbio"]
         }
       },
-      "required": ["name", "out_dir", "seqplat"]
+      "required": ["seqplat"]
     }
   },
   "allOf": [
     {
       "$ref": "#/definitions/input"
+    },
+    {
+      "$ref": "#/definitions/output"
     },
     {
       "$ref": "#/definitions/additional_settings"

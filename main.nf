@@ -1465,7 +1465,7 @@ process report {
  		body_add_par("", style = "Normal")
 	} else {
 		if (location == "correct"){
-			report <- body_add_par(report, value = paste("The termini are predicted to be at ", plus_term, " and ", minus_term, ", which are the ends of the reference genome.  This indicates that the reference genome is correct and that this phage genome does not have terminal repeats, which would shift one of the predicted termini.", sep = "")) 
+			report <- body_add_par(report, value = paste("The termini are predicted to be at ", plus_term, " and ", minus_term, ", which are the ends of the reference genome.", sep = "")) 
 		} else if (location == "multiple") {
 			report <- body_add_par(report, "Multiple positions have tau values above 0.1, but none are above 0.35.  No prediction can be made about phage genome termini.")
 		} else if (location == "none") {
