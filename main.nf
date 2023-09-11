@@ -4,7 +4,6 @@ ref_ch = Channel.of(params.reference)
 seq_ch = Channel.of(params.fastq)
 plat_ch = Channel.of(params.seqplat)
 name_ch = Channel.of(params.name)
-outdir_ch = Channel.of(params.out_dir)
 
 // This process concatenates all of the fastq.gz files in the fastq input directory
 // into one file containing all sequences
