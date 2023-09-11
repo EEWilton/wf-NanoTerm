@@ -22,9 +22,15 @@
           "default": "None",
           "description": "Path to the reference genome fasta file",
           "format": "file-path"
+        },
+        "seqplat": {
+          "type": "string",
+          "default": "nanopore",
+          "description": "Sequencing platform",
+          "enum": ["nanopore", "illumina", "pacbio"]
         }
       },
-      "required": ["fastq", "reference"]
+      "required": ["fastq", "reference", "seqplat"]
     },
     "output": {
       "title": "Output Options",
@@ -44,21 +50,6 @@
         }
       },
       "required": ["name", "out_dir"]
-    },
-    "additional_settings": {
-      "title": "Additional settings",
-      "type": "object",
-      "description": "",
-      "default": "",
-      "properties": {
-        "seqplat": {
-          "type": "string",
-          "default": "nanopore",
-          "description": "Sequencing platform",
-          "enum": ["nanopore", "illumina", "pacbio"]
-        }
-      },
-      "required": ["seqplat"]
     }
   },
   "allOf": [
@@ -67,9 +58,6 @@
     },
     {
       "$ref": "#/definitions/output"
-    },
-    {
-      "$ref": "#/definitions/additional_settings"
     }
   ]
 }
