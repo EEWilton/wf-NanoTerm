@@ -935,6 +935,9 @@ process classify {
 	num_sig_plus <- nrow(top_sig_plus)
 	num_sig_minus <- nrow(top_sig_minus)
 
+	print(top_sig_plus)
+	print(top_sig_minus)
+
 	# if no significant peaks in tau on forward strand, set values to NA
 	# if there are significant peaks, the forward terminus is the position with the highest tau value
 	if (num_sig_plus == 0){	
@@ -969,19 +972,21 @@ process classify {
   		peaks = NA
 	}
 
-	print(peaks)
-	print(plus_term_tau)
-	print(minus_term_tau)
-
 	# if multiple peaks but none > 0.35, classed as multiple
 	# if plus and minus peaks > 0.35, then two peaks
+	# if the number of positions with significant tau values (>0.1) is above a threshold (10), then it is multiple peaks
 	if (peaks == "multiple"){							
   		if (plus_term_tau < 0.35 & minus_term_tau < 0.35) {
-    		peaks = "multiple"			
-  		} else {
+    		peaks = "multiple_low"			
+  		} else if(num_sig_plus > 10 | num_sig_minus > 10) {
+			peaks = "multiple_high"	
+		}
+		 else {
     		peaks = "two"
   		}
 	}
+
+	print(peaks)
 
 	# if there are two peaks, one on each strand, 
 	# and the positions correspond to the first and last positions of the reference genome
@@ -1031,9 +1036,16 @@ process classify {
 		term_dist = NA
 	}
 
-	if (peaks == "multiple") {
+	if (peaks == "multiple_low") {
 		location = "multiple"
-		class = "multiple"
+		class = "multiple_low"
+		subclass = NA
+		term_dist = NA
+	}
+
+	if (peaks == "multiple_high") {
+		location = "multiple"
+		class = "multiple_high"
 		subclass = NA
 		term_dist = NA
 	}
@@ -1180,10 +1192,10 @@ process terminalReads {
 			terminalReads=TRUE
 			if [ \$plus_term -lt \$minus_term ]
 			then
-				region="\$(echo input_reference:\$plus_term-\$minus_term)"
+				region="\$(echo no_permutation:\$plus_term-\$minus_term)"
 			elif [ \$plus_term -gt \$minus_term ]
 			then
-				region="\$(echo input_reference:\$minus_term-\$plus_term)"
+				region="\$(echo no_permutation:\$minus_term-\$plus_term)"
 			fi
 		fi
 		if [ \$peaks == "one" ]
@@ -1191,10 +1203,10 @@ process terminalReads {
 			terminalReads=TRUE
 			if [ plus_term == NA ]
 			then
-				region="\$(echo input_reference:(\$minus_term - 10)-(\$minus_term + 10))"
+				region="\$(echo no_permutation:(\$minus_term - 10)-(\$minus_term + 10))"
 			elif [ minus_term == NA ]
 			then
-				region="\$(echo input_reference:(\$plus_term - 10)-(\$plus_term + 10))"
+				region="\$(echo no_permutation:(\$plus_term - 10)-(\$plus_term + 10))"
 			fi
 		fi
 		samtools view -b $aln > aln.bam
@@ -1235,11 +1247,11 @@ process terminalReads {
 		touch term_aln.bam
 	fi
 
-	if [ \$location == "internal" ]
-	then
-		touch term_aln.bam
-		touch term_aln_circ3.bam
-	fi
+	#if [ \$location == "internal" ]
+	#then
+	#	touch term_aln.bam
+	#	touch term_aln_circ3.bam
+	#fi
 
 	if [ \$location == "correct" ]
 	then
@@ -1420,6 +1432,37 @@ process report {
   			geom_vline(xintercept=minus_term, linetype="dashed", colour="violet", linewidth=1)	
 	}
 
+	# if there are two peaks and two predicted termini, this graph will show the reads
+	# that cover some or all of the sequence between the termini
+	if (terminalReads == TRUE & location == "internal" & peaks == "two") {
+		strand.labs <- c("Strand: plus", "Strand: minus")
+		names(strand.labs) <- c("+", "-")
+		term_aln <- readGAlignments("$term_aln", use.names = TRUE)
+		ggterm <- autoplot(term_aln, xlab="Reference genome position",
+			geom = "rect", aes(fill = strand, colour = strand), show.legend = FALSE) +
+ 			facet_grid(strand ~ ., labeller = labeller(strand = strand.labs)) +
+  			theme_calc() + 
+			geom_vline(xintercept=plus_term, linetype="dashed", colour="springgreen3", linewidth=1) + 
+  			geom_vline(xintercept=minus_term, linetype="dashed", colour="violet", linewidth=1)
+		png("ggterm.png", width = 6, height = 8, units = "in", res = 300)
+		print(ggterm)
+		dev.off()
+	}
+	if (terminalReads == TRUE & location == "terminal" & peaks == "two") {
+		term_aln <- readGAlignments("$term_aln_circ3", use.names = TRUE)
+		strand.labs <- c("Strand: plus", "Strand: minus")
+		names(strand.labs) <- c("+", "-")
+		ggterm <-autoplot(term_aln, xlab="Reference genome position",
+			geom = "rect", aes(fill = strand, colour = strand), show.legend = FALSE) +
+ 			facet_grid(strand ~ ., labeller = labeller(strand = strand.labs)) +
+  			theme_calc() + 
+			geom_vline(xintercept=plus_term_circ3, linetype="dashed", colour="springgreen3", linewidth=1) + 
+  			geom_vline(xintercept=minus_term_circ3, linetype="dashed", colour="violet", linewidth=1)
+		png("ggterm.png", width = 6, height = 8, units = "in", res = 300)
+		print(ggterm)
+		dev.off()
+	}
+
 	report <- read_docx() %>%
 		body_add_par(value = paste("NanoTerm Report: ", name), style = "heading 1") %>%
 		body_add_par("", style = "Normal") %>%
@@ -1465,10 +1508,12 @@ process report {
 	} else {
 		if (location == "correct"){
 			report <- body_add_par(report, value = paste("The termini are predicted to be at ", plus_term, " and ", minus_term, ", which are the ends of the reference genome.", sep = "")) 
-		} else if (location == "multiple") {
-			report <- body_add_par(report, "Multiple positions have tau values above 0.1, but none are above 0.35.  No prediction can be made about phage genome termini.")
+		} else if (class == "multiple_low") {
+			report <- body_add_par(report, "Multiple positions have tau values above 0.1, but none are above 0.35.  This phage may use a headful packinging style with no specific pac site, it may be a Mu-like phage, or it may have a novel mechanism. If there is a large pecentage of reads that do not align to the phage reference genome, then it may be due to phage-host chimeric sequence reads from a Mu-like phage.")
+		} else if (class == "multiple_high") {
+			report <- body_add_par(report, "Many positions have tau values above 0.1.  This phage may use a headful packinging style with no specific pac site, it may be a Mu-like phage, or it may have a novel mechanism. If there is a large pecentage of reads that do not align to the phage reference genome, then it may be due to phage-host chimeric sequence reads from a Mu-like phage.")
 		} else if (location == "none") {
-			report <- body_add_par(report, "No positions have tau values above 0.1.  This indicates that the phage genome might use a headful packaging mechanism without a specific packaging site, or it might be a Mu-like phage.  If there is a large pecentage of reads that do not align to the phage reference genome, then it may be due to phage-host chimeric sequence reads from a Mu-like phage.")
+			report <- body_add_par(report, "No positions have tau values above 0.1.  This indicates that the phage genome might use a headful packaging mechanism without a specific packaging site, it might be a Mu-like phage, or it may have a novel mechanism.  If there is a large pecentage of reads that do not align to the phage reference genome, then it may be due to phage-host chimeric sequence reads from a Mu-like phage.")
 		} else {
 			report <- body_add_par(report, value = paste("The predicted termini are ", location, " within the reference genome.", sep = ""), style = "Normal") %>%
 			body_add_par(value = paste("Plus terminus: ", plus_term, sep = ""), style = "Normal") %>%
@@ -1493,8 +1538,17 @@ process report {
 			body_add_gg(value = ggdepth, style = "centered", height = 3.25) %>%
 			body_add_par(value = "Figure 2. The total read depth of the sequencing run, graphed as a rolling average with a window size equal to 1% of the reference genome length.") %>%
  			body_add_par("", style = "Normal")
-	}
 
+		# if there are two peaks, show a graph with the reads that cover/cross the termini
+		if (terminalReads == TRUE & location == "internal" & peaks == "two"){
+			report <- body_add_img(report, src = "ggterm.png", style = "centered", width = 6, height = 8) %>%
+			body_add_par(value = "Figure 3. Reads that cover part or all of the region between the predicted termini.")
+		}
+		if (terminalReads == TRUE & location == "terminal" & peaks == "two"){
+			report <- body_add_img(report, src = "ggterm.png", style = "centered", width = 6, height = 8) %>%
+			body_add_par(value = "Figure 3. Reads that cover part or all of the region between the predicted termini.  Due to the terminal nature of the predicted termini, the read are mapped against the third circular permutation of the reference genome.")
+		}
+	}
 
 	print(report, target = "./report.docx")
 	"""
