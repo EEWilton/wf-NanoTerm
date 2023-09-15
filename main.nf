@@ -934,7 +934,7 @@ process classify {
 
 	num_sig_plus <- nrow(top_sig_plus)
 	num_sig_minus <- nrow(top_sig_minus)
-
+	
 	print(top_sig_plus)
 	print(top_sig_minus)
 
@@ -1489,10 +1489,17 @@ process report {
 	}
 		
 	report <- body_add_par(report, value = paste("Average read length: ", aveReadLen, sep = ""), style = "Normal") %>%
-		body_add_par(value = paste("Maximum read length: ", maxReadLen, sep = ""), style = "Normal") %>%
-		body_add_par(value = paste("Percentage of plus strand with no coverage: ", format(percent_uncov_f, digits=3), "%", sep = ""), style = "Normal") %>%
-		body_add_par(value = paste("Percentage of minus strand with no coverage: ",  format(percent_uncov_r, digits=3), "%", sep = ""), style = "Normal") %>%
-		body_add_par("Phage prediction", style = "heading 2")
+		body_add_par(value = paste("Maximum read length: ", maxReadLen, sep = ""), style = "Normal")
+	
+	# add note here if there is part of the genome that has no read coverage
+	if (percent_uncov_f > 0) {
+		report <- body_add_par(report, value = paste("Percentage of plus strand with no coverage: ", format(percent_uncov_f, digits=3), "%", sep = ""), style = "Normal")
+	}
+	if (percent_uncov_r > 0) {
+		report <- body_add_par(report, value = paste("Percentage of minus strand with no coverage: ", format(percent_uncov_r, digits=3), "%", sep = ""), style = "Normal")
+	}
+	
+	report <- body_add_par(report, "Phage prediction", style = "heading 2")
 
 	# if there is part of reference genome that has no read coverage, 
 	# then it is not ideal for terminus prediction
@@ -1509,45 +1516,57 @@ process report {
 		if (location == "correct"){
 			report <- body_add_par(report, value = paste("The termini are predicted to be at ", plus_term, " and ", minus_term, ", which are the ends of the reference genome.", sep = "")) 
 		} else if (class == "multiple_low") {
-			report <- body_add_par(report, "Multiple positions have tau values above 0.1, but none are above 0.35.  This phage may use a headful packinging style with no specific pac site, it may be a Mu-like phage, or it may have a novel mechanism. If there is a large pecentage of reads that do not align to the phage reference genome, then it may be due to phage-host chimeric sequence reads from a Mu-like phage.")
+			report <- body_add_par(report, "Multiple positions have tau values above 0.1, but none are above 0.35.  This phage may use a headful packinging style with no specific pac site, it may be a Mu-like phage, or it may have a novel mechanism. If there is a large percentage of reads that do not align to the phage reference genome, then it may be due to phage-host chimeric sequence reads from a Mu-like phage.")
 		} else if (class == "multiple_high") {
-			report <- body_add_par(report, "Many positions have tau values above 0.1.  This phage may use a headful packinging style with no specific pac site, it may be a Mu-like phage, or it may have a novel mechanism. If there is a large pecentage of reads that do not align to the phage reference genome, then it may be due to phage-host chimeric sequence reads from a Mu-like phage.")
+			report <- body_add_par(report, "Many positions have tau values above 0.1.  This phage may use a headful packaging style with no specific pac site, it may be a Mu-like phage, or it may have a novel mechanism. If there is a large percentage of reads that do not align to the phage reference genome, then it may be due to phage-host chimeric sequence reads from a Mu-like phage.") %>%
+			body_add_par(value = paste("There are ", num_sig_plus, " positions with tau > 0.1 on the plus strand, and ", num_sig_minus, " positions with tau > 0.1 on the minus strand.", sep = ""), style = "Normal")
 		} else if (location == "none") {
-			report <- body_add_par(report, "No positions have tau values above 0.1.  This indicates that the phage genome might use a headful packaging mechanism without a specific packaging site, it might be a Mu-like phage, or it may have a novel mechanism.  If there is a large pecentage of reads that do not align to the phage reference genome, then it may be due to phage-host chimeric sequence reads from a Mu-like phage.")
-		} else {
-			report <- body_add_par(report, value = paste("The predicted termini are ", location, " within the reference genome.", sep = ""), style = "Normal") %>%
+			report <- body_add_par(report, "No positions have tau values above 0.1.  This indicates that the phage genome might use a headful packaging mechanism without a specific pac site, it might be a Mu-like phage, or it may have a novel mechanism.  If there is a large percentage of reads that do not align to the phage reference genome, then it may be due to phage-host chimeric sequence reads from a Mu-like phage.")
+		} else if (location == "terminal") {
+			report <- body_add_par(report, "One or both of the predicted termini are at the ends of the reference genome.", style = "Normal") %>%
+			body_add_par(value = paste("Plus terminus: ", plus_term, sep = ""), style = "Normal") %>%
+			body_add_par(value = paste("Minus terminus: ", minus_term, sep = ""), style = "Normal") %>%
+			body_add_par(value = paste("The distance between predicted termini is ", term_dist, " nucleotides.", sep = ""), style = "Normal") %>%
+			body_add_par(value = paste("Class: ", class, sep = ""), style = "Normal") %>%
+			body_add_par(value = paste("Subclass: ", subclass, sep = ""), style = "Normal")
+		} else if (location == "internal") {
+			report <- body_add_par(report, "The predicted termini are internal to the reference genome.", style = "Normal") %>%
 			body_add_par(value = paste("Plus terminus: ", plus_term, sep = ""), style = "Normal") %>%
 			body_add_par(value = paste("Minus terminus: ", minus_term, sep = ""), style = "Normal") %>%
 			body_add_par(value = paste("The distance between predicted termini is ", term_dist, " nucleotides.", sep = ""), style = "Normal") %>%
 			body_add_par(value = paste("Class: ", class, sep = ""), style = "Normal") %>%
 			body_add_par(value = paste("Subclass: ", subclass, sep = ""), style = "Normal")
 		}
+	}
+	 if (repeatLength == term_dist) {
+		report <- body_add_par(report, "The repeat removed from the reference genome is the same length as the distance between the predicted termini.")
+	 }
 
-		# include table, tau and depth graphs into report
-		report <- body_add_par(report, "", style = "Normal") %>%
-			body_add_par("Table 1. Top five tau values for each strand of the reference genome.", style = "Normal") %>%
-			body_add_table(table, style = "table_template", first_column = TRUE) %>%
-			body_add_par("", style = "Normal") %>%
-			body_add_break(pos = "after") %>%
-			body_add_par("Figures", style = "heading 2") %>%
-			body_add_par("", style = "Normal") %>%
-			body_add_gg(value = ggtau, style = "centered", height = 3.25) %>%
-			body_add_par(value = "Figure 1. The tau value calculated for each genome position.") %>%
-			body_add_par("", style = "Normal") %>%
-			body_add_par("", style = "Normal") %>%
-			body_add_gg(value = ggdepth, style = "centered", height = 3.25) %>%
-			body_add_par(value = "Figure 2. The total read depth of the sequencing run, graphed as a rolling average with a window size equal to 1% of the reference genome length.") %>%
- 			body_add_par("", style = "Normal")
 
-		# if there are two peaks, show a graph with the reads that cover/cross the termini
-		if (terminalReads == TRUE & location == "internal" & peaks == "two"){
-			report <- body_add_img(report, src = "ggterm.png", style = "centered", width = 6, height = 8) %>%
-			body_add_par(value = "Figure 3. Reads that cover part or all of the region between the predicted termini.")
-		}
-		if (terminalReads == TRUE & location == "terminal" & peaks == "two"){
-			report <- body_add_img(report, src = "ggterm.png", style = "centered", width = 6, height = 8) %>%
-			body_add_par(value = "Figure 3. Reads that cover part or all of the region between the predicted termini.  Due to the terminal nature of the predicted termini, the read are mapped against the third circular permutation of the reference genome.")
-		}
+	# include table, tau and depth graphs into report
+	report <- body_add_par(report, "", style = "Normal") %>%
+		body_add_par("Table 1. Top five tau values for each strand of the reference genome.", style = "Normal") %>%
+		body_add_table(table, style = "table_template", first_column = TRUE) %>%
+		body_add_par("", style = "Normal") %>%
+		body_add_break(pos = "after") %>%
+		body_add_par("Figures", style = "heading 2") %>%
+		body_add_par("", style = "Normal") %>%
+		body_add_gg(value = ggtau, style = "centered", height = 3.25) %>%
+		body_add_par(value = "Figure 1. The tau value calculated for each genome position.") %>%
+		body_add_par("", style = "Normal") %>%
+		body_add_par("", style = "Normal") %>%
+		body_add_gg(value = ggdepth, style = "centered", height = 3.25) %>%
+		body_add_par(value = "Figure 2. The total read depth of the sequencing run, graphed as a rolling average with a window size equal to 1% of the reference genome length.") %>%
+ 		body_add_par("", style = "Normal")
+
+	# if there are two peaks, show a graph with the reads that cover/cross the termini
+	if (terminalReads == TRUE & location == "internal" & peaks == "two"){
+		report <- body_add_img(report, src = "ggterm.png", style = "centered", width = 6, height = 8) %>%
+		body_add_par(value = "Figure 3. Reads that cover part or all of the region between the predicted termini.")
+	}
+	if (terminalReads == TRUE & location == "terminal" & peaks == "two"){
+		report <- body_add_img(report, src = "ggterm.png", style = "centered", width = 6, height = 8) %>%
+		body_add_par(value = "Figure 3. Reads that cover part or all of the region between the predicted termini.  Due to the terminal nature of the predicted termini, the read are mapped against the third circular permutation of the reference genome, placing the predicted termini within the genome.")
 	}
 
 	print(report, target = "./report.docx")
