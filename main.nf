@@ -1538,9 +1538,15 @@ process report {
 			body_add_par(value = paste("Subclass: ", subclass, sep = ""), style = "Normal")
 		}
 	}
-	 if (repeatLength == term_dist) {
+
+	if (is.na(repeatLength) | is.na(term_dist)) {
+		print("Either repeat length or distance between termini is not a number.")
+	} else {
+		if (repeatLength == term_dist) {
 		report <- body_add_par(report, "The repeat removed from the reference genome is the same length as the distance between the predicted termini.")
 	 }
+	}
+	
 
 
 	# include table, tau and depth graphs into report
